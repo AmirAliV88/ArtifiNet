@@ -14,13 +14,19 @@ class Neuron:
    def __init__(_, W, Bias=.1): _.W, _.Bias = W, Bias
    __call__ = GET = lambda _,X: X*_.W+_.Bias
 
+#:: A Micro-Node of ENN|AENN
+class ENeuron:
+   __slots__ = ("W", "e", "Bias")
+   def __init__(_, W, e, Bias=.1): _.W, _.e, _.Bias = W, e, Bias
+   __call__ = GET = lambda _,X,E: np.sum(X*_.W)+np.sum(E*_.e)+_.Bias
+
 #:: A Micro-Node of RNN
 class RNeuron:
    __slots__ = ("Wx", "Wh", "Bias")
    def __init__(_, Wx, Wh, Bias=.1): _Wx, _.Wh, _.Bias = Wx, Wh, Bias
    __call__ = GET = lambda _,X, hp: (X*_.Wx)+(hp*_.Wh)+_.Bias
 
-INSTALLED_NEURONS = [ Neuron, RNeuron ]
+INSTALLED_NEURONS = [ Neuron, ENeuron, RNeuron ]
 
 
 ######################################################################################################
