@@ -14,7 +14,13 @@ class Neuron:
    def __init__(_, W, Bias=.1): _.W, _.Bias = W, Bias
    __call__ = GET = lambda _,X: X*_.W+_.Bias
 
-INSTALLED_NEURONS = [ Neuron ]
+#:: A Micro-Node of RNN
+class RNeuron:
+   __slots__ = ("Wx", "Wh", "Bias")
+   def __init__(_, Wx, Wh, Bias=.1): _Wx, _.Wh, _.Bias = Wx, Wh, Bias
+   __call__ = GET = lambda _,X, hp: (X*_.Wx)+(hp*_.Wh)+_.Bias
+
+INSTALLED_NEURONS = [ Neuron, RNeuron ]
 
 
 ######################################################################################################
