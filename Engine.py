@@ -68,3 +68,94 @@ class Layer:
    def TrainModeOff(_): _.Train = False
    def TrainModeOn(_): _.Train = True
 
+
+######################################################################################################
+
+
+#? Neural Networks
+#@ Artifical Neural Network | ANN
+class ANN:
+   def __init__(_, NetName=None, Layers:list=[], ImportData=None): _.NetName = NetName; _.Layers = Layers or _.__Load__(ImportData)
+
+   def __Load__(_, ImportData=None):
+      if ImportData: _.__setstate__(ImportData)
+      else: 
+         with open(f"./db/{_.NetName}.Ai", 'rb') as File: _.__setstate__(safeserialize.load(File))
+      return _.Layers
+
+   def SaveNetwork(_, AsFile=None): #$ --> File
+      Domain = { 
+         I:{ "Activation":L.__Act_str__, "Dropout":L.Dropout, "Args":{ "W":L.W, "Bias":L.Bias } } for I,L in enumerate(_.Layers)
+      }
+      Domain = {"__class__":"ANN", "NetName":_.NetName, ">>":Domain} 
+      with open(AsFile or f"./db/{_.NetName}.Ai", "wb") as File: safeserialize.dump(Domain, File)
+   Save = SaveModel = SaveNetwork
+
+   def AddLayer(_, Weights, Bias, Activation="Relu", Dropout=0):
+      newLayer = Layer( Index=len(_.Layers)+1, Args={"W":Weights, "Bias":Bias}, Act=Activation, Dropout=Dropout )
+      _ += newLayer
+
+   __iadd__ = lambda _,newLayer: (_, _.Layers.append(newLayer)) [0]
+   __getitem__ = lambda _,i: _.Layers[i]
+   __len__ = lambda _: len(_.Layers)
+
+   def Loss(_, Yp, Y, Type="MSE"):
+      Y = Y[:, None] if Y.ndim == 1 else Y
+      match Type:
+         case "MSE":  Loss, dA = Mean((Y-Yp)**2), 2*(Yp-Y)/len(Y)
+         case "MAE":  Loss, dA = Mean(np.abs(Y-Yp)), np.sign(Yp-Y)/len(Y)
+         case "RMSE": Loss, dA = np.sqrt(Mean((Y-Yp)**2)), (Yp-Y)/(len(Y)*np.sqrt(Loss))
+      return Loss, dA
+
+   def Accuracy(_, Yp, Y, Type="R2"):
+      match Type:
+         case "R2": return 1-( np.sum((Y-Yp)**2) / (np.sum((Y-Mean(Y))**2)+1e-8) )
+         case "Binary":
+            Yc = np.argmax(Y, axis=1) if len(Y.shape)>1 else Y.astype(int)
+            return Mean( (Yp>.5).astype(int).flatten() == Yc.flatten())
+         case "MultiClass": return Mean(np.argmax(Yp, axis=1) == np.argmax(Y, axis=1))
+
+   def Activity(_, X): #<< Auto Return Thinks
+      S, A, Z = [], [], [], #<< S: Inputs(Signals)
+      for L in _.Layers:
+         s,z,_,X = L(X, Return_Thinks=True); S.append(s); A.append(X); Z.append(z)
+      return S,A,Z
+   Thinking = Activity
+
+   def Training(_, XT, YT):
+      #<< Training_Options:  Lrate*, Epochs*:int, BatchSize=1, LossMethod="MSE", AccuracyMethod="R2", AutoSave=True, EarlyStop=False, shuffle=False
+      if not hasattr(_, "Training_Options"): raise AttributeError("Training allowed just with Net.Training_Options")
+      
+      O, XT, YT, Best = _.Training_Options, Array(XT), Array(YT), float('inf')
+      for L in _: L.TrainModeOn()
+
+      for e in range(O["Epochs"]+1):
+         tLoss, tAcc, Bs = [], [], O.get("BatchSize", 1)
+
+         if O.get("shuffle") or O.get("Shuffle"):
+            Sh = npra.permutation(len(XT)); XT, YT = XT[Sh], YT[Sh]
+
+         for k in range(0, len(XT), Bs):
+            X, Y = XT[k:k+Bs], YT[k:k+Bs]; A = _.Thinking(X)[1]
+            Loss, dA = _.Loss(A[-1], Y, O.get("LossMethod", "MSE")); tLoss.append(Loss)
+            for L in reversed(_): dA = L.backward(dA, O["Lrate"])
+            tAcc.append(_.Accuracy(A, Y, O.get("AccuracyMethod"))) #<< Accuracy
+
+         os.system("cls" if os.name=="nt" else "clear")
+         print(f"Epoch: {e:4d} \t|\t Loss: {Mean(Array(tLoss)):.6f} \t|\t Accuracy: {Mean(Array(tAcc)):.2%} ")
+
+         if O.get("EarlyStop"):
+            if Loss<BestLoss: BestLoss = Loss
+            else:
+               print(" EARLY STOPPING !!! "); break
+
+      for L in _: L.TrainModeOff()
+      if O.get("AutoSave", True): _.SaveModel()
+      return _
+
+   def GET(_,X):
+      for l in _.Layers: X = l.GET(X)
+      return X
+   __call__ = GET
+
+
