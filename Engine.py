@@ -188,3 +188,27 @@ class ANN:
    __call__ = GET
 
 
+#? Neural Network
+#@ ENN | AENN | Artificial emotional neural networks | شبکه های عصبی احساسی مصنوعی
+class ENN(ANN):
+   def SaveNetwork(_, AsFile=None): #$ --> File
+      Domain = { 
+         I:{ "Activation":L.__Act_str__, "Dropout":L.Dropout, "Args":{ "W":L.W, "We":L.We, "Bias":L.Bias } } for I,L in enumerate(_.Layers)
+      }
+      Domain = {"__class__":"ANN", "NetName":_.NetName, ">>":Domain} 
+      with open(AsFile or f"./db/{_.NetName}.Ai", "wb") as File: safeserialize.dump(Domain, File)
+
+   def AddLayer(_, Weights, We, Bias, Activation="Relu", Dropout=0):
+      newLayer = Layer( Index=len(_.Layers)+1, Args={"W":Weights, "We":We, "Bias":Bias}, Act=Activation, Dropout=Dropout )
+      _ += newLayer
+
+   def Activity(_, X, E): #<< Auto Return Thinks
+      S, A, Z = [], [], [], #<< S: Inputs (Signals)
+      for L in _: 
+         _, s, z, __, X = L(X, E, Return_Thinks=True); S.append(s); A.append(X); Z.append(z)
+      return S,A,Z
+
+   def GET(_, X, E):
+      for l in _: X = l.GET(X, E)
+      return X
+
