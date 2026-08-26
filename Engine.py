@@ -75,6 +75,29 @@ class Layer:
    def TrainModeOn(_): _.Train = True
 
 
+class ELayer(Layer):
+   def __init__(_, Args:dict, Index=None, Act:str="Relu", Dropout=0):
+      _.W, _.We, _.Bias, _.LastCall = Array(Args["W"]), Array(Args["We"]), Array(Args["Bias"]), None
+      _.Index, _.Inputs, _.Dropout, _.__Act_str__, _.Act = Index, _.W.shape[1], Dropout, Act, eval(f"_.{Act}")
+      _.TrainModeOff()
+
+   Neurons = lambda _: [ ENeuron(w,e,b) for w,e,b in zip(_.W.T, _.We.T, _.Bias.T) ]
+
+   def GET(_, X, E, Return_Thinks=False):
+      Z = Array(X) @_.W + np.sum(E*_.We) +_.Bias; A = _.Act(Z)
+      Mask = A*npra.binomial(1, 1-_.Dropout, Z.shape)/(1-_.Dropout) if _.Train and _.Dropout else A
+      _.LastCall = (E, X, Z, A, Mask); return _.LastCall if Return_Thinks else Mask
+
+   #!!!
+   def Ebackward(_, dA, Lr): 
+      _.We -= Lr*np.sum( _.LastCall[0]*dA*_._a(), axis=0, keepdims=True) /E.shape[0]  #$ dWe = E * dZ   |   We = Lr * sum(dWe) /m
+
+   #!!!
+   def Ebackward(_, dA, Lr):
+      E = _.LastCall[0]; _.We -= Lr * E.T @ dA*_._a() / E.shape[0]  #$ dWe = E * dZ   |   We = Lr * sum(dWe) /m
+      return dZ @ _.W.T
+
+
 ######################################################################################################
 
 
