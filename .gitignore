@@ -7,8 +7,6 @@ nodebug/
 debug/
 Debug/
 Bug/
-!Debug/
-!debug/
 old*/
 Old*/
 
