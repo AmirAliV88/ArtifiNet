@@ -68,7 +68,7 @@ class Layer:
 
    def backward(_, dA, Lr):
       W_, dZ, m = _.W.copy(), dA*_._a(), _.LastCall[0].shape[0]
-      _.W -= Lr* _.LastCall[0].T @ dZ /m; _.Bias -= Lr*np.sum(dZ, axis=0, keepdims=True) /m #$ Bias -= Lr*dB
+      _.W -= Lr* _.LastCall[0].T @ dZ /m; _.Bias -= Lr*np.sum(dZ, axis=0) /m #$ Bias -= Lr*dB
       return dZ @ W_.T
 
    def TrainModeOff(_): _.Train = False
@@ -84,15 +84,16 @@ class ELayer(Layer):
    Neurons = lambda _: [ ENeuron(w,e,b) for w,e,b in zip(_.W.T, _.We.T, _.Bias.T) ]
 
    def GET(_, X, E, Return_Thinks=False):
-      Z = Array(X) @_.W + np.sum(E*_.We) +_.Bias; A = _.Act(Z)
+      Z = Array(X) @_.W + np.sum(E*_.We, axis=1) +_.Bias; A = _.Act(Z)
       Mask = A*npra.binomial(1, 1-_.Dropout, Z.shape)/(1-_.Dropout) if _.Train and _.Dropout else A
       _.LastCall = (E, X, Z, A, Mask); return _.LastCall if Return_Thinks else Mask
+   __call__ = GET
 
-   #!!!
-   def Ebackward(_, dA, Lr): 
-      _.We -= Lr*np.sum( _.LastCall[0]*dA*_._a(), axis=0, keepdims=True) /E.shape[0]  #$ dWe = E * dZ   |   We = Lr * sum(dWe) /m
+   def backward(_, dA, Lr):
+      W_, dZ, m = _.W.copy(), dA*_._a(), _.LastCall[1].shape[0]
+      _.W -= Lr* _.LastCall[1].T @ dZ /m; _.Bias -= Lr*np.sum(dZ, axis=0) /m #$ Bias -= Lr*dB
+      return dZ @ W_.T
 
-   #!!!
    def Ebackward(_, dA, Lr):
       E = _.LastCall[0]; _.We -= Lr * E.T @ dA*_._a() / E.shape[0]  #$ dWe = E * dZ   |   We = Lr * sum(dWe) /m
       return dZ @ _.W.T
@@ -191,24 +192,58 @@ class ANN:
 #? Neural Network
 #@ ENN | AENN | Artificial emotional neural networks | شبکه های عصبی احساسی مصنوعی
 class ENN(ANN):
+
+   SterioEnv = lambda _: np.zeros(_[0].We.shape[1])
+
    def SaveNetwork(_, AsFile=None): #$ --> File
       Domain = { 
          I:{ "Activation":L.__Act_str__, "Dropout":L.Dropout, "Args":{ "W":L.W, "We":L.We, "Bias":L.Bias } } for I,L in enumerate(_.Layers)
       }
       Domain = {"__class__":"ANN", "NetName":_.NetName, ">>":Domain} 
       with open(AsFile or f"./db/{_.NetName}.Ai", "wb") as File: safeserialize.dump(Domain, File)
+   Save = SaveModel = SaveNetwork
 
    def AddLayer(_, Weights, We, Bias, Activation="Relu", Dropout=0):
       newLayer = Layer( Index=len(_.Layers)+1, Args={"W":Weights, "We":We, "Bias":Bias}, Act=Activation, Dropout=Dropout )
       _ += newLayer
 
-   def Activity(_, X, E): #<< Auto Return Thinks
-      S, A, Z = [], [], [], #<< S: Inputs (Signals)
+   def Activity(_, X, E=None): #<< Auto Return Thinks
+      E = E if type(E)==np.ndarray else _.SterioEnv(); S, A, Z = [], [], [], #<< S: Inputs (Signals)
       for L in _: 
          _, s, z, __, X = L(X, E, Return_Thinks=True); S.append(s); A.append(X); Z.append(z)
       return S,A,Z
+   Thinking = Activity
+
+   def ETraining(_, XT, YT, E):
+      #<< Training_Options:  Lrate*, Epochs*:int, BatchSize=1, LossMethod="MSE", AccuracyMethod="R2", AutoSave=True, EarlyStop=False
+      if not hasattr(_, "Training_Options"): raise AttributeError("Training allowed just with Net.Training_Options")
+
+      O, XT, YT, Best, Bs = _.Training_Options, Array(XT), Array(YT), float('inf'), _.Training_Options.get("BatchSize", 1)
+      for L in _: L.TrainModeOn()
+
+      for epo in range(O["Epochs"]+1):
+         tLoss, tAcc = [], []
+
+         for k in range(0, len(XT), Bs):
+            X, Y = XT[k:k+Bs], YT[k:k+Bs]; A = _.Thinking(X, E)[1]
+            Loss, dA = _.Loss(A[-1], Y, O.get("LossMethod", "MSE")); tLoss.append(Loss)
+            for L in reversed(_): dA = L.backward(dA, O["Lrate"])
+            tAcc.append(_.Accuracy(A, Y, O.get("AccuracyMethod"))) #<< Accuracy
+
+         os.system("cls" if os.name=="nt" else "clear")
+         print(f"Epoch: {epo:4d} \t|\t Loss: {Mean(Array(tLoss)):.6f} \t|\t Accuracy: {Mean(Array(tAcc)):.2%} ")
+
+         if O.get("EarlyStop"):
+            if Loss<Best: Best = Loss
+            else:
+               print(" EARLY STOPPING !!! "); break         
+
+      for L in _: L.TrainModeOff()
+      if O.get("AutoSave", True): _.SaveModel()
+      return _
 
    def GET(_, X, E):
       for l in _: X = l.GET(X, E)
       return X
+   __call__ = GET
 
