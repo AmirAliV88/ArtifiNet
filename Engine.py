@@ -1,5 +1,4 @@
-import os, re, safeserialize, numpy as np
-from collections import Counter, defaultdict
+import os, numpy as np
 from . import *
 
 
@@ -246,4 +245,47 @@ class ENN(ANN):
       for l in _: X = l.GET(X, E)
       return X
    __call__ = GET
+
+
+#? Algoritm
+#@ KNN Algoritm
+class KNN:
+   def __init__(_, X, Y, W="Uniform", Meteric="Euclidean"): _.X, _.Y, _.W, _.meteric = Array(X), Array(Y), W, Meteric #: meterics: Manhattan or Euclidean
+
+   def SpaceMeter(_, X):
+    match _.meteric:
+        case "Euclidean": return np.sqrt(np.sum((X-_.X)**2, axis=1)) 
+        case "Manhattan": return np.sum(np.abs(X-_.X), axis=1) 
+   
+   def __NK__(_, X, k=3): #? کلید همسایه
+      O = _.SpaceMeter(X).argsort()[:k] #? متراژ
+      Xp, Yp = Array(_.X)[O], Array(_.Y)[O]
+      return (O, Xp, Yp)
+
+   def _Predict_1(_, X, k=3):
+      D = _.SpaceMeter(X); O = np.argsort(D)[:k]
+      if _.W == "Uniform": #? رای اکثریت یا همون مد گیری
+         a,b = np.unique(_.Y[O], return_counts=True); return a[np.argmax(b)]
+      else:  #? Distance
+         S = {}
+         for l, w in zip(_.Y[O], 1/(D+1e-8)): S[l] = S.get(l, 0)+w
+         return max(S, key=S.get)
+   __call__ = predict = _Predict_1
+
+   def predict_proba(_, X, k=3):
+      X, probas = Array(X), []
+      if X.ndim == 1: X = X.reshape(1, -1)
+      for x in X:
+         O, D = _.__NK__(x, k); L, uniq = _.Y[O], np.unique(_.Y)      
+         if _.W == "Uniform": proba = {l: Counter(L).get(l, 0)/k for l in uniq}
+         else:
+            S = { l:0 for l in uniq }
+            for l, w in zip(L, 1/(D+1e-8)): S[l] += w
+            proba = { l: S[l]/sum(S.values()) for l in uniq }
+         probas.append([proba[l] for l in uniq])
+      return Array(probas)
+   P_class = predict_proba
+
+   Score = lambda _,X,Y: Mean( Array([ _(x) for x in X ]) == Y )
+   __repr__ = lambda _: f"<KNN Metric='{_.meteric}'>"
 
