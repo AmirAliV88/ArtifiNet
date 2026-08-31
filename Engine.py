@@ -1,4 +1,5 @@
-import os, numpy as np
+import os, re, numpy as np
+from collections import defaultdict
 from . import *
 
 
@@ -253,7 +254,7 @@ class KNN:
    def __init__(_, X, Y, W="Uniform", Meteric="Euclidean"): _.X, _.Y, _.W, _.meteric = Array(X), Array(Y), W, Meteric #: meterics: Manhattan or Euclidean
 
    def SpaceMeter(_, X):
-    match _.meteric:
+      match _.meteric:
         case "Euclidean": return np.sqrt(np.sum((X-_.X)**2, axis=1)) 
         case "Manhattan": return np.sum(np.abs(X-_.X), axis=1) 
    
@@ -288,4 +289,76 @@ class KNN:
 
    Score = lambda _,X,Y: Mean( Array([ _(x) for x in X ]) == Y )
    __repr__ = lambda _: f"<KNN Metric='{_.meteric}'>"
+
+
+class Tokenizer:
+   def __init__(_): _.Vocab, _.spT, _.PadI, _.UNKI, _.SI, _.EI, _.Minfreq = [], ['<PAD>', '<UNK>', '<START>', '<END>'], 0, 1, 2, 3, 1
+   __len__ = nVoc = lambda _: len(_.Vocab)
+   __repr__ = lambda _: f"<T:{_.Voc}>"
+   #TODO :  Save and Load
+
+   def fit(_, Documents, MaxVocabSize=10000, Minfreq=1):
+      _.Minfreq, WordC = Minfreq, defaultdict(int)
+      for doc in Documents:
+         for W in _._T_(doc): WordC[W] += 1
+      _.Vocab = _.spT
+      for W, fr in sorted(WordC.items(), key=lambda x:x[1], reverse=True):
+         if fr>=Minfreq and len(_)<MaxVocabSize and W not in _.Vocab: _.Vocab.append(W)
+      _.W2I, _.I2W = { W:I for I,W in enumerate(_.Vocab) }, { I:W for I,W in enumerate(_.Vocab) }
+      return _
+
+   @staticmethod
+   def _T_(T):
+      T = T.lower()
+      T = re.sub(r'[.,!?;:"()\[\]{}]', ' ', T.lower()) #<< جایگزینی علائم نگارشی با فاصله
+      T = re.sub(r"'", " ' ", T) #<< مدیریت آپاستروف (مثل don't -> don ' t)
+      T = re.sub(r'\s+', ' ', re.sub(r"-", " - ", T)).strip()
+      return Tokenizer.Normalize(T).split()
+
+   @staticmethod
+   def Normalize(T:str)->str:
+      return T.strip() .replace("ي", "ی") .replace("ى", "ی") .replace("ك", "ک") .replace("ۀ", "ه") .replace("ـ", "") .replace("\u200c", "")
+
+   def Correcter(_, W):
+      if not W or not W.strip(): return W
+      Orgi, Tar = W, _.Normalize(W)
+      for vw in _.Vocab:
+         if _.Normalize(vw) == Tar: return vw
+      Bw, Bdist = Orgi, float("inf")
+
+      for vw in _.Vocab:
+         if abs(len(Tar)-len(C))>3: continue
+         prev = list(range(len(C)+1))
+         for i, ca in enumerate(Tar, start=1):
+            cur = [i]
+            for j, cb in enumerate(_.Normalize(vw), start=1):
+               cost = 0 if ca==cb else 1
+               cur.append(min(
+                  cur[j-1]+1,     # حذف
+                  prev[j]+1,      # اضافه
+                  prev[j-1]+cost  # جایگزینی
+               ))
+            prev = cur
+         dist = prev[-1]
+         if dist<Bdist: Bdist, Bw = dist, vw
+
+      Maxdist = 1 if len(Tar)<=4 else 2 if len(Tar)<=8 else 3
+      return Bw if Bdist <= Maxdist else Orgi
+
+   def encode(_, T, Maxn=10, Padd="R", Turncate="R"): #? R: Right  | L: Left
+      if Maxn<3: raise ValueError("Maxn must be at least 3 (for START and END Tokens)")
+      I = [ _.W2I.get(T, _.UNKI) for T in _._T_(T) ]
+      if len(I)>(Maxn-2): I = I[:(Maxn-2)] if Turncate == "R" else I[-(Maxn-2):]
+      R = [_.SI]+I+[_.EI]
+      if Maxn-len(R)>0: R = R+[_.PadI]*(Maxn-len(R)) if Padd == "R" else [_.PadI]*(Maxn-len(R))+R
+      return R
+
+   def decode(_, I, IgnoreSpecial=True, asList=False):
+      W = []
+      for i in I:
+         if IgnoreSpecial and i in [_.PadI, _.UNKI, _.SI, _.EI]: continue
+         W.append(_.I2W.get(i, "<UNK>"))
+      return W if asList else ' '.join(W)
+
+
 
