@@ -291,11 +291,24 @@ class KNN:
    __repr__ = lambda _: f"<KNN Metric='{_.meteric}'>"
 
 
+#? Algoritm
+#@ Test Tokenizer and Test Normalizer
 class Tokenizer:
    def __init__(_): _.Vocab, _.spT, _.PadI, _.UNKI, _.SI, _.EI, _.Minfreq = [], ['<PAD>', '<UNK>', '<START>', '<END>'], 0, 1, 2, 3, 1
+   __getstate__ = lambda _: { "Vocab":_.Vocab, "Minfreq":_.Minfreq }   #$ --> File
+   __setstate__ = lambda _,D: (_, _.__dict__.update(D)) [0]            #$ <-- File
    __len__ = nVoc = lambda _: len(_.Vocab)
    __repr__ = lambda _: f"<T:{_.Voc}>"
-   #TODO :  Save and Load
+
+   def Save(_, AsFile=None):
+      with open(AsFile or f"./db/{float(nprArr(1))}.Tokenizer", "wb") as File: 
+         safeserialize.dump({ "Vocab":_.Vocab, "Minfreq":_.Minfreq }, File)
+   
+   def __Load__(_, FromFile=None, ImportData=None):
+      if bool(FromFile)^bool(ImportData): raise ImportError("!: FromFile or ImportData ?")
+      if FromFile:
+         with open(FromFile, "rb") as File: _.__dict__.update(safeserialize.load(File))
+      elif ImportData: _.__dict__.update(ImportData)
 
    def fit(_, Documents, MaxVocabSize=10000, Minfreq=1):
       _.Minfreq, WordC = Minfreq, defaultdict(int)
