@@ -1,5 +1,5 @@
-import os, re, numpy as np
-from collections import defaultdict
+import os, re, safeserialize, numpy as np
+from collections import defaultdict, Counter
 from . import *
 
 
@@ -303,12 +303,14 @@ class Tokenizer:
    def Save(_, AsFile=None):
       with open(AsFile or f"./db/{float(nprArr(1))}.Tokenizer", "wb") as File: 
          safeserialize.dump({ "Vocab":_.Vocab, "Minfreq":_.Minfreq }, File)
+      return _
    
    def __Load__(_, FromFile=None, ImportData=None):
-      if bool(FromFile)^bool(ImportData): raise ImportError("!: FromFile or ImportData ?")
+      if not bool(FromFile)^bool(ImportData): raise ImportError("!: FromFile or ImportData ?")
       if FromFile:
          with open(FromFile, "rb") as File: _.__dict__.update(safeserialize.load(File))
       elif ImportData: _.__dict__.update(ImportData)
+      return _
 
    def fit(_, Documents, MaxVocabSize=10000, Minfreq=1):
       _.Minfreq, WordC = Minfreq, defaultdict(int)
@@ -372,6 +374,131 @@ class Tokenizer:
          if IgnoreSpecial and i in [_.PadI, _.UNKI, _.SI, _.EI]: continue
          W.append(_.I2W.get(i, "<UNK>"))
       return W if asList else ' '.join(W)
+
+
+#? Algoritm
+#@ Word Embeddings | Word to Vec | Word2Vec
+
+class Embeddings: 
+   def __init__(_, dim=20, padd=2, negative_samples=5, Lr=.01, epochs=100):
+      _.dim, _.padd, _.negs, _.Lr, _.epochs = dim, padd, negative_samples, Lr, epochs
+      _.Domain, _.S, _.Voc, _.W2I, _.I2W, _.V, = [], [], {}, {}, {}, 0
+      _.W_center, _.W_ct, _.Embedds = None, None, None
+      _.Pairs, _.Tokenizer = [], Tokenizer()
+    
+   Tokenize = lambda _,T: _.Tokenizer._T_(T)
+    
+   def _BuildVocab(_):
+      Wordc = Counter([w for s in _.S for w in s])
+      _.W2I = {w: i for i, (w, _) in enumerate(Wordc.items())}
+      _.I2W = {i: w for w, i in _.W2I.items()}
+      _.Voc, _.V = Wordc, len(Wordc)
+    
+   def _BuildTrainingPairs(_):
+      _.Pairs = []
+      for s in _.S:
+         for i, c in enumerate(s):
+            cti = list(range(max(0, i-_.padd), min(len(s), i+_.padd+1) ))
+            cti.remove(i)
+            for j in cti: _.Pairs.append((_.W2I[c], _.W2I[s[j]]))
+      _.Pairs = Array(_.Pairs, dtype=np.intp)
+    
+   def fit(_, Domain):
+      _.Tokenizer.fit(Domain)
+      _.Domain, _.S = Domain, [ _.Tokenize(S) for S in Domain ]
+      _._BuildVocab(); _._BuildTrainingPairs(); _._init_Weights(); _.Train(); _.BuildEmbedds(); _.Tokenizer.fit(Domain)
+      return _
+    
+   def _init_Weights(_): _.W_center, _.W_ct = npra.uniform(-0.5, 0.5, (_.V, _.dim)), npra.uniform(-0.5, 0.5, (_.V, _.dim))
+    
+   @staticmethod
+   _Sigmoid = lambda x: 1/(1+np.exp(-np.clip(x, -50, 50)))
+
+   def _negsUp(_, ci, cti): #! این متد خیلی مهم نی
+      if not (0<=ci<_.V): raise IndexError("ci out of range")
+      if not (0<=cti<_.V): raise IndexError("cti out of range")
+      # if _.negs>_.V-1: raise ValueError("negs must be <= V -1")
+      ni = npra.choice(_.V-1, _.negs, replace=False); ni[ni>=cti] += 1
+      vc, vw, vn = _.W_center[ci], _.W_ct[cti], _.W_ct[ni].copy()
+      ps, pn = _._Sigmoid(np.dot(vc, vw)), _._Sigmoid(vn @ vc); Gc = (ps-1)*vw+pn@vn
+      _.W_center[ci] -= _.Lr*Gc; _.W_ct[cti] -= _.Lr*(ps-1)*vc; _.W_ct[ni] -= _.Lr*pn[:,None]*vc
+
+   def Train(_, EchoEpo=True):
+      if _.V <= 1: return
+      for epo in range(_.epochs):
+         if EchoEpo: print(f"Epoch: {epo}") 
+         npra.shuffle(_.Pairs)
+         for ci, cti in _.Pairs:
+            ni = npra.choice(_.V-1, _.negs, replace=False); ni[ni>=cti] += 1
+            vc, vw, vn = _.W_center[ci], _.W_ct[cti], _.W_ct[ni].copy()
+            ps, pn = _._Sigmoid(np.dot(vc, vw)), _._Sigmoid(vn @ vc); Gc = (ps-1)*vw+pn@vn
+            _.W_center[ci] -= _.Lr*Gc; _.W_ct[cti] -= _.Lr*(ps-1)*vc; _.W_ct[ni] -= _.Lr*pn[:,None]*vc
+    
+   def BuildEmbedds(_): _.Embedds = (_.W_center+_.W_ct)/2
+    
+   def solve(_, eq, topn=1):
+      eq = eq.strip()
+      if not eq.split(): return []
+      TarVec, excW, op = np.zeros(_.dim), [], "+"
+      for t in eq.split():
+         if t in ['+', '-']: op = t
+         else:
+            if t not in _.W2I: return []
+            excW.append(t)
+            TarVec += -1*_.Embedds[_.W2I[t]] if op=="-" else _.Embedds[_.W2I[t]]
+      fi = _._Find(TarVec, ex=excW, topn=topn)
+      return fi[0] if topn==1 and fi else fi
+   
+   def FMS(_, W, topn=5):
+      if W not in _.W2I: return []  
+      V, sim = _.Embedds[_.W2I[W]], []
+      for ow, i in _.W2I.items():
+         if ow == W: continue
+         cos_sim = np.dot(V, _.Embedds[i]) / ( np.linalg.norm(V) * np.linalg.norm(_.Embedds[i]) + 1e-8 )
+         sim.append((ow, cos_sim))
+      sim.sort(key=lambda x: x[1], reverse=True)
+      return sim[:topn]
+   find_most_similar = FMS
+
+   def _Find(_, TarVec, ex=None, topn=5, metric='cosine'):
+      ex, S = (ex or []), []  
+      for W, i in _.W2I.items():
+         if W in ex: continue
+         Vw = _.Embedds[i]
+         if metric == 'cosine': s = np.dot(TarVec, Vw) / ( np.linalg.norm(TarVec) * np.linalg.norm(Vw) + 1e-8 )
+         elif metric == 'euclidean': s = -np.linalg.norm(TarVec - Vw)
+         elif metric == 'dot': s = np.dot(TarVec, Vw)
+         else: s = np.dot(TarVec, Vw) / ( np.linalg.norm(TarVec) * np.linalg.norm(Vw) + 1e-8 )   
+         S.append((W, s))
+      S.sort(key=lambda x: x[1], reverse=True)
+      return S[:topn]
+   
+   GetVec = lambda _,W: _.Embedds[_.W2I[W]] if W in _.W2I else None
+
+   def Save(_, AsFile):
+      _.Tokenizer = { "Vocab":_.Tokenizer.Vocab, "Minfreq":_.Tokenizer.Minfreq }
+      with open(AsFile, 'wb') as f: safeserialize.dump(_.__dict__, f)
+      return _
+
+   def __Load__(_, FilePath):
+      with open(FilePath, 'rb') as f: data = _.__dict__.update(safeserialize.load(f))
+      _.Tokenizer = Tokenizer().__Load__(ImportData=_.Tokenizer)
+      return _
+
+   def _FitWithPreTrained_(_, Dom, PreTrainedPath=None, SavePath=None):
+      if PreTrainedPath and _.__Load__(PreTrainedPath):        
+         _.Domain, _.S = Dom, [ _.Tokenize(s) for s in Domain]
+         _._BuildVocab()
+         for W, i in _.W2I.items():
+            if i >= len(_.W_center):
+               nc, nct = npra.uniform(-.5, .5, (1, _.dim)), npra.uniform(-.5, .5, (1, _.dim))
+               _.W_center, _.W_ct = np.vstack([_.W_center, nc]), np.vstack([self.W_ct, nct])
+      _._BuildTrainingPairs()
+      if not PreTrainedPath: _._init_Weights()
+      _.Train(); _.Build() 
+      if SavePath: _.Save(SavePath)
+      return _
+   _FPT_ = _FitWithPreTrained_
 
 
 
