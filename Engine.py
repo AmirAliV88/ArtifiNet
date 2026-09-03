@@ -378,7 +378,6 @@ class Tokenizer:
 
 #? Algoritm
 #@ Word Embeddings | Word to Vec | Word2Vec
-
 class Embeddings: 
    def __init__(_, dim=20, padd=2, negative_samples=5, Lr=.01, epochs=100):
       _.dim, _.padd, _.negs, _.Lr, _.epochs = dim, padd, negative_samples, Lr, epochs
