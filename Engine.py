@@ -40,11 +40,12 @@ class Layer:
       _.Index, _.Inputs, _.Dropout, _.__Act_str__, _.Act = Index, _.W.shape[1], Dropout, Act, eval(f"_.{Act}")
       _.TrainModeOff()
 
-   Neurons = lambda _: [ Neuron(w,b) for w,b in zip(_.W.T, _.Bias.T) ]
-   ReLU = Relu = lambda _,Z: np.maximum(0, Z)
-   Sigmoid = lambda _,Z: 1/(1+np.exp(-Z))
-   Linear = lambda _,Z: Z #: pass X
-   Tanh = lambda _,Z: np.tanh(Z)
+   Neurons = staticmethod( lambda _: [ Neuron(w,b) for w,b in zip(_.W.T, _.Bias.T) ] )
+   ReLU = Relu = staticmethod( lambda _,Z: np.maximum(0, Z) )
+   Sigmoid = staticmethod( lambda _,Z: 1/(1+np.exp(-Z)) )
+   Linear = staticmethod( lambda _,Z: Z ) #: pass X
+   Tanh = staticmethod( lambda _,Z: np.tanh(Z) )
+   @staticmethod
    def Softmax(_,Z): 
       e = np.exp(Z-np.max(Z, axis=-1, keepdims=True))
       return e / np.sum(e, axis=-1, keepdims=True)
@@ -410,8 +411,7 @@ class Embeddings:
     
    def _init_Weights(_): _.W_center, _.W_ct = npra.uniform(-0.5, 0.5, (_.V, _.dim)), npra.uniform(-0.5, 0.5, (_.V, _.dim))
     
-   @staticmethod
-   _Sigmoid = lambda x: 1/(1+np.exp(-np.clip(x, -50, 50)))
+   _Sigmoid = staticmethod( lambda x: 1/(1+np.exp(-np.clip(x, -50, 50))) )
 
    def _negsUp(_, ci, cti): #! این متد خیلی مهم نی
       if not (0<=ci<_.V): raise IndexError("ci out of range")
