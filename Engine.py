@@ -293,6 +293,36 @@ class KNN:
 
 
 #? Algoritm
+#@ K-Means | Unsupervised Algoritm
+class KMeans:
+   def __init__(_, K=3, maxi=200, t=1e-4, Init='K-Means++'): _.K, _.maxi, _.t, _.Init, _.C, _.L, _.I = K, maxi, t, Init, None, None, None 
+    
+   def __(_, X):
+      n = X.shape[0]
+      if _.Init == 'Random': return X[npra.choice(n, _.K, replace=False)].copy()
+      else:  # kmeans++
+         C = [X[npra.randint(n)]] #: centroids
+         for _ in range(1, _.K):
+            d2 = np.min([np.sum((X-c)**2, axis=1) for c in C], axis=0)
+            C.append(X[npra.choice(n, p=d2/(d2.sum()+1e-10))])
+      return Array(C)
+    
+   def fit(_, X):
+      _.C = _.__(X)
+      for _i in range(_.maxi):
+         _.L = np.argmin(np.sqrt(((X-_.C[:, np.newaxis])**2).sum(axis=2)), axis=0)
+         newC = Array([X[_.L==k].mean(axis=0) if np.any(_.L == k) else _.C[k] for k in range(_.K)])
+         if np.all(np.abs(newC-_.C)<_.t): break
+         _.C = newC
+      _.I = np.sum((X-_.C[_.L])**2)
+      return _
+    
+      predict = __call__ = lambda _,X: np.argmin(np.sqrt(((X-_.C[:, np.newaxis])**2).sum(axis=2)), axis=0)
+    
+   fit_predict = lambda _,X: _.fit(X).L
+
+
+#? Algoritm
 #@ SVM | بردار ماشین پشتیبان
 class SVM:
    def __init__(_, Kernel='Linear', C=1.0, tol=1e-3, maxi=100, degree=3, Gamma=None, coef0=0.0):
