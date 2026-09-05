@@ -293,6 +293,64 @@ class KNN:
 
 
 #? Algoritm
+#@ SVM | بردار ماشین پشتیبان
+class SVM:
+   def __init__(_, Kernel='Linear', C=1.0, tol=1e-3, maxi=100, degree=3, Gamma=None, coef0=0.0):
+      _.Kernel, _.C, _.tol, _.maxi, _.degree, _.Gamma, _.coef0, _.alpha = Kernel, C, tol, maxi, degree, Gamma, coef0, None
+      _.B, _.X, _.Y, _.K = 0, None, None, None
+
+   def _Kf_(_, x1, x2):
+      G = _.Gamma if _.Gamma else 1/len(x1)
+      match _.Kernel:
+         case "Linear": return np.dot(x1, x2)
+         case "Poly": return (G*np.dot(x1, x2)+_.coef0)**_.degree
+         case "RBF": return np.exp(-G*np.linalg.norm(x1-x2)**2)
+         case "Sigmoid": return np.tanh(G*np.dot(x1, x2)+_.coef0)
+      raise ValueError("Unknown kernel :(")
+
+   def _cKM_(_, X):
+      n = X.shape[0]; K = np.zeros((n, n))
+      for i in range(n):
+         for j in range(n): K[i, j] = _._Kf_(X[i], X[j])
+      return K
+
+   _decf = lambda _,X: np.sum( _.alpha*_.Y*[ _._Kf_(xi, X) for xi in _.X ] ) +_.B
+
+   def _select_j(_, i, Ei):
+      E = np.zeros(len(_.alpha))
+      for k in range(len(_.alpha)): E[k] = _._decf(_.X[k])-_.Y[k]
+      diff = np.abs(E-Ei); diff[i] = -1.0
+      return np.argmax(diff)
+
+   def fit(_, X, Y):
+      _.X, _.Y, n, _.K, _.alpha, _.B = X, Y, len(X), _._cKM_(X), np.zeros(len(X)), 0
+      for mi in range(_.maxi):
+         P = 0
+         for i in range(n):
+            print("MI: ", mi, "I: ", i)
+            Ei = _._decf(X[i])-Y[i]
+            if not ( (Y[i]*Ei<-_.tol and _.alpha[i]<_.C) or (Y[i]*Ei>_.tol and _.alpha[i]>0)): continue        
+            j = _._select_j(i, Ei)
+            if j == i: continue
+            Ej, ai, aj = _._decf(X[j])-Y[j], _.alpha[i], _.alpha[j] 
+            L, H = max(0, aj-ai) if Y[i]!=Y[j] else max(0, ai+aj-_.C), min(_.C, _.C+aj-ai) if Y[i]!=Y[j] else min(_.C, ai+aj)
+            if L == H: continue    
+            eta = 2*_.K[i,j]-_.K[i,i]-_.K[j,j]
+            if eta >= 0: continue    
+            _.alpha[j] = np.clip(aj-Y[j]*(Ei-Ej)/eta, L, H)
+            if abs(_.alpha[j]-aj)<1e-5: continue    
+            _.alpha[i] = ai+Y[i]*Y[j]*(aj-_.alpha[j]) 
+            b1 = _.B-Ei-Y[i]*(_.alpha[i]-ai)*_.K[i,i]-Y[j]*(_.alpha[j]-aj)*_.K[i,j]
+            b2 = _.B-Ej-Y[i]*(_.alpha[i]-ai)*_.K[i,j]-Y[j]*(_.alpha[j]-aj)*_.K[j,j]
+            _.B = b1 if 0<_.alpha[i]<_.C else (b2 if 0<_.alpha[j]<_.C else (b1+b2)/2)
+            P += 1
+         if P == 0: break
+      return _
+
+   predict = __call__ = GET = lambda _, X: np.sign(Array([_._decf(x) for x in X]))
+
+
+#? Algoritm
 #@ Test Tokenizer and Test Normalizer
 class Tokenizer:
    def __init__(_): _.Vocab, _.spT, _.PadI, _.UNKI, _.SI, _.EI, _.Minfreq = [], ['<PAD>', '<UNK>', '<START>', '<END>'], 0, 1, 2, 3, 1
