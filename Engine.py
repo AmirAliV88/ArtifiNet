@@ -589,3 +589,71 @@ class Embeddings:
 
 
 
+#:: A Node of Decision Tree Classifier
+class LeafNode:
+   __slots__ = ("Opt", "T", "L", "R", "V")
+   def __init__(_, Opt=None, T=None, L=None, R=None, V=None): _.Opt, _.T, _.L, _.R, _.V = Opt, T, L, R, V
+   #$ No method No Action just a Dict-Class
+
+#? Algoritm
+#@ Decision Tree Classifier | درخت تصمیم گیری
+class DecisionTreeClassifier:
+   def __init__(_, Max_depth=None, Minss=2, criterion='gini'):
+      _.Maxd, _.Minss, _.criterion = Max_depth, Minss, criterion #<< 'gini' یا 'entropy'
+      _.Root, _.n_Opts, _.n_classes = None, None, None
+    
+   _y2int = staticmethod( lambda y: np.asarray(y).ravel().astype(np.int32) )
+   _gini = lambda _,y: 1-np.sum((np.bincount(_._y2int(y))/len(y))**2) #<< محاسبه جینی
+   def _entropy(_,y): #<< محاسبه آنتروپی
+      P = np.bincount(_._y2int(y))/len(y); P = P[P>0] #<< حذف صفرها برای جلوگیری از log(0)
+      return -np.sum(P*np.log2(P))
+   _imp = lambda _,y: _._gini(y) if _.criterion=="gini" else _._entropy(y)
+    
+   def _Infogain(_, y, yl, yr):
+      Pl, pr, Pi = len(yl)/len(y), len(yr)/len(y), _._imp(y)
+      Ci = Pl*_._imp(yl)+Pl*_._imp(yr) 
+      return Pi-Ci
+    
+   def _BestSplit(_, X, y):
+      bsg, bsf, bst = -1, None, None
+      if X.shape[0]<_.Minss: return None, None
+      for Opt in range(X.shape[1]):
+         for t in np.unique(X[:, Opt]):
+            Lidx, Ridx = X[:,Opt]<=t, X[:,Opt]>t
+            if np.sum(Lidx)==0 or np.sum(Ridx)==0: continue    
+            g = _._Infogain(y, y[Lidx], y[Ridx])  
+            if g>bsg: bsg, bsf, bst = g, Opt, t
+      return bsf, bst
+    
+   def _BuildTree(_, X, y, depth=0):
+      # n_s, n_Opts, n_labels = X.shape,len(np.unique(y))
+      bsf, bst = _._BestSplit(X, y) # پیدا کردن بهترین تقسیم
+      if len(np.unique(y)) == 1: return LeafNode(V=np.bincount(_._y2int(y)).argmax()) # شرط توقف: همه یک کلاس هستند
+      if _.Maxd is not None and depth>=_.Maxd: return LeafNode(V=np.bincount(y).argmax()) # شرط توقف: رسیدن به حداکثر عمق
+      if X.shape[0]<_.Minss: return LeafNode(V=np.bincount(_._y2int(y)).argmax()) # شرط توقف: تعداد نمونه‌ها کمتر از حد مجاز
+      if bsf is None: return LeafNode(V=np.bincount(y).argmax()) # اگر تقسیم خوبی پیدا نشد
+      Lidx, Ridx = X[:, bsf]<=bst, X[:, bsf]>bst # انجام تقسیم
+      # ساخت زیردرخت‌ها
+      L_subT = _._BuildTree(X[Lidx], y[Lidx], depth+1)
+      R_subT = _._BuildTree(X[Ridx], y[Ridx], depth+1)
+      return LeafNode(Opt=bsf, T=bst, L=L_subT, R=R_subT)
+    
+   def fit(_, X, Y):
+      X, Y = Array(X), Array(Y); _.n_Opts, _.n_classes, _.Root = X.shape[1], len(np.unique(Y)), _._BuildTree(X, Y)
+    
+   def _predict_one(_, x, node):
+      if node.V is not None: return node.V
+      if x[node.Opt].all() <= node.T: return _._predict_one(x, node.L)
+      else: return _._predict_one(x, node.R)
+   PredOne = PredictOne = Pred1 = _predict_one
+   Predict = lambda _,X: Array([_.Pred1(Array(X), _.Root) for x in X])
+    
+   def _PrintTree(_, node, depth=0):
+      if node.V is not None: print(f"{'\t'*depth}P: {node.V}")
+      else:
+         print(f"{'\t'*depth}Opt {node.Opt} <= {node.T:.4f}?")
+         print(f"{'\t'*depth}Left:"); _._print_tree(node.L, depth+1)
+         print(f"{'\t'*depth}Right:"); _._print_tree(node.R, depth+1)
+   
+   def PrintTree(_): 
+      if _.Root: _._PrintTree(_.Root)
