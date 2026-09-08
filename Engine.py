@@ -598,9 +598,9 @@ class LeafNode:
 #? Algoritm
 #@ Decision Tree Classifier | درخت تصمیم گیری
 class DecisionTreeClassifier:
-   def __init__(_, Max_depth=None, Minss=2, criterion='gini'):
-      _.Maxd, _.Minss, _.criterion = Max_depth, Minss, criterion #<< 'gini' یا 'entropy'
-      _.Root, _.n_Opts, _.n_classes = None, None, None
+   def __init__(_, Max_depth=None, Minss=2, Maxf=None, RandomState=None, criterion='gini'):
+      _.Maxd, _.Minss, _.Maxf, _.RandS, _.criterion = Max_depth, Minss, Maxf, RandomState, criterion #<< 'gini' یا 'entropy'
+      _.Root, _.n_Opts, _.nC = None, None, None
     
    _y2int = staticmethod( lambda y: np.asarray(y).ravel().astype(np.int32) )
    _gini = lambda _,y: 1-np.sum((np.bincount(_._y2int(y))/len(y))**2) #<< محاسبه جینی
@@ -613,24 +613,27 @@ class DecisionTreeClassifier:
       Pl, pr, Pi = len(yl)/len(y), len(yr)/len(y), _._imp(y)
       Ci = Pl*_._imp(yl)+Pl*_._imp(yr) 
       return Pi-Ci
-    
-   def _BestSplit(_, X, y):
+
+   def _BestSplit(_, X, Y, fi=None):
       bsg, bsf, bst = -1, None, None
       if X.shape[0]<_.Minss: return None, None
-      for Opt in range(X.shape[1]):
-         for t in np.unique(X[:, Opt]):
-            Lidx, Ridx = X[:,Opt]<=t, X[:,Opt]>t
-            if np.sum(Lidx)==0 or np.sum(Ridx)==0: continue    
-            g = _._Infogain(y, y[Lidx], y[Ridx])  
-            if g>bsg: bsg, bsf, bst = g, Opt, t
+      fs = np.arange(X.shape[1]) if fi is None else fi
+      for f in fs:
+         uniqv = np.unique(X[:, f])
+         if len(uniqv)>100: uniqv = npra.choice(uniqv, 100, replace=False)
+         for t in uniqv: 
+            Li, Ri = X[:, f]<=t, X[:, f]>t
+            if np.sum(Li)==0 or np.sum(Ri)==0: continue
+            g = _._Infogain(Y, Y[Li], Y[Ri])
+            if g>bsg: bst, bsf, bst = g, f, t
       return bsf, bst
-    
+
    def _BuildTree(_, X, y, depth=0):
       # n_s, n_Opts, n_labels = X.shape,len(np.unique(y))
-      bsf, bst = _._BestSplit(X, y) # پیدا کردن بهترین تقسیم
       if len(np.unique(y)) == 1: return LeafNode(V=np.bincount(_._y2int(y)).argmax()) # شرط توقف: همه یک کلاس هستند
       if _.Maxd is not None and depth>=_.Maxd: return LeafNode(V=np.bincount(y).argmax()) # شرط توقف: رسیدن به حداکثر عمق
       if X.shape[0]<_.Minss: return LeafNode(V=np.bincount(_._y2int(y)).argmax()) # شرط توقف: تعداد نمونه‌ها کمتر از حد مجاز
+      bsf, bst = _._BestSplit(X, y, _.fi) # پیدا کردن بهترین تقسیم
       if bsf is None: return LeafNode(V=np.bincount(y).argmax()) # اگر تقسیم خوبی پیدا نشد
       Lidx, Ridx = X[:, bsf]<=bst, X[:, bsf]>bst # انجام تقسیم
       # ساخت زیردرخت‌ها
@@ -639,8 +642,15 @@ class DecisionTreeClassifier:
       return LeafNode(Opt=bsf, T=bst, L=L_subT, R=R_subT)
     
    def fit(_, X, Y):
-      X, Y = Array(X), Array(Y); _.n_Opts, _.n_classes, _.Root = X.shape[1], len(np.unique(Y)), _._BuildTree(X, Y)
-    
+      X, Y = Array(X), _._y2int(Y); _.nf, _.nC = X.shape[1], len(np.unique(Y))
+      if _.Maxf is None: _.Maxf = int(np.sqrt(_.nf))
+      elif isinstance(_.Maxf, float): _.Maxf = int(_.Maxf*_.nf)
+      if _.RandS is not None: npra.seed(_.RandS)
+      if _.Maxf<_.nf: _.fi = npra.choice(_.nf, _.Maxf, replace=False)
+      else: _.fi = None
+      _.Root = _._BuildTree(X, Y)
+      return _
+
    def _predict_one(_, x, node):
       if node.V is not None: return node.V
       if x[node.Opt].all() <= node.T: return _._predict_one(x, node.L)
@@ -648,6 +658,16 @@ class DecisionTreeClassifier:
    PredOne = PredictOne = Pred1 = _predict_one
    Predict = lambda _,X: Array([_.Pred1(Array(X), _.Root) for x in X])
     
+   def P_proba(_, X):
+      X, Probas = Array(X), []
+      for x in X:
+         node = _.Root
+         while node.V is None:
+            node = node.L if x[node.Opt]<=node.T else node.R
+         prob = np.zeros(_.nC); prob[node.V] = 1; Probas.append(prob)
+      return Array(Probas)
+   predict_proba = P_proba
+
    def _PrintTree(_, node, depth=0):
       if node.V is not None: print(f"{'\t'*depth}P: {node.V}")
       else:
