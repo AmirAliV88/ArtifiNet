@@ -1,5 +1,6 @@
 import os, re, safeserialize, numpy as np
 from collections import defaultdict, Counter
+from joblib import Parallel, delayed
 from . import *
 
 
@@ -596,8 +597,8 @@ class LeafNode:
    #$ No method No Action just a Dict-Class
 
 #? Algoritm
-#@ Decision Tree Classifier | درخت تصمیم گیری
-class DecisionTreeClassifier:
+#@ Decision Tree | درخت تصمیم گیری
+class DecisionTree:
    def __init__(_, Max_depth=None, Minss=2, Maxf=None, RandomState=None, criterion='gini'):
       _.Maxd, _.Minss, _.Maxf, _.RandS, _.criterion = Max_depth, Minss, Maxf, RandomState, criterion #<< 'gini' یا 'entropy'
       _.Root, _.n_Opts, _.nC = None, None, None
@@ -646,8 +647,7 @@ class DecisionTreeClassifier:
       if _.Maxf is None: _.Maxf = int(np.sqrt(_.nf))
       elif isinstance(_.Maxf, float): _.Maxf = int(_.Maxf*_.nf)
       if _.RandS is not None: npra.seed(_.RandS)
-      if _.Maxf<_.nf: _.fi = npra.choice(_.nf, _.Maxf, replace=False)
-      else: _.fi = None
+      _.fi = npra.choice(_.nf, _.Maxf, replace=False) if _.Maxf<_.nf else None
       _.Root = _._BuildTree(X, Y)
       return _
 
@@ -677,3 +677,97 @@ class DecisionTreeClassifier:
    
    def PrintTree(_): 
       if _.Root: _._PrintTree(_.Root)
+
+
+#? Algoritm
+#@ Random Forest | جنگل تصادفی
+class RandomForest:
+   def __init__(_, n=100, Maxd=None, Minss=2, Maxf="sqrt", criterion="gini", Bootstrap=True, oobs=False, nJobs=-1, RandomState=None):
+      _.n, _.Maxd, _.Minss, _.Maxf, _.Bootstrap, _.oobs, _.C = n, Maxd, Minss, Maxf, Bootstrap, oobs, criterion
+      _.nJobs, _.RandS, _.Trees, _.nf, _.nC, _.oobss, _.oobscr, _.fimp = nJobs, RandomState, [], None, None, [], None, None
+
+   def _parse_maxf(_, nf):
+      if isinstance(_.Maxf, int): return _.Maxf
+      elif isinstance(_.Maxf, float): return int(_.Maxf*nf)
+      elif _.Maxf=="sqrt": return int(np.sqrt(nf))
+      elif _.Maxf=="log2": return int(np.log2(nf))
+      else: return nf
+
+   def _BS(_, X, Y):
+      n = len(X); i = npra.choice(n, n, replace=True)
+      oobi = list( set(range(n))-set(i) )
+      return X[i], Y[i], oobi
+
+   def Tr1Tree(_, X, Y, TreeI, RandS=None):
+      X, Y = Array(X), Array(Y)
+      if RandS is not None: npra.seed(RandS+TreeI)
+      XTree, YTree, oobi = _._BS(X, Y) if _.Bootstrap else (X, Y, [])
+      Maxf = _._parse_maxf(X.shape[1])
+      Tree = DecisionTree( Max_depth=_.Maxd, Minss=_.Minss, criterion=_.C, Maxf=Maxf, RandomState=RandS+TreeI if RandS else None )
+      Tree.fit(XTree, YTree)
+      return Tree, oobi
+   TrainOneTree = Tr1Tree
+
+   def fit(_, X, Y):
+      X, Y = Array(X), Array(Y).ravel().astype(np.int32)
+      _.nf, _.nC, _.Trees, _.oobs = X.shape[1], len(np.unique(Y)), [], []
+      if _.RandS is not None: npra.seed(_.RandS)
+      if _.nJobs!=1 and _.n>1:
+         R = Parallel(n_jobs=_.nJobs)( delayed(_.Tr1Tree)(X, Y, i, _.RandS) for i in range(_.n) )
+         for T, oobi in R: _.Trees.append(T); _.oobs.append(oobi)
+      else:
+         for i in range(_.n): 
+            Tree, oobi = _.Tr1Tree(X, Y, i, _.RandS); _.Trees.append(Tree); _.oobs.append(oobi)
+      if _.oobscr: _.oobsrc = _._coobsr(X, Y)
+      _.fimp = _._cfimp(); return _
+
+   def _coobsrc(_, X, Y):
+      oobp = [ [] for _i in range(len(X)) ]
+      for T, oobi in zip(_.Trees, _.oobs):
+         for i in oobi: oobp[i].append(T.Pred1(X[i], T.Root))
+      C = 0
+      for i,P in enumerate(oobp):
+         if len(P)>0:
+            if Counter(P).most_common(1)[0][0]==Y[i]: C += 1
+      return C/len(X) if len(X)>0 else 0
+
+   def _cfimp(_):
+      for T in _.Trees: _._Addimp(T.Root, np.zeros(_.nf), 1)
+      return np.zeros(_.nf)/len(_.Trees)
+
+   def _Addimp(_, node, imp, W):
+      if node.V is not None: return
+      if node.Opt is not None: 
+         imp[node.Opt] += W; _._Addimp(node.L, imp, W/2); _._Addimp(node.R, imp, W/2)
+
+   def predict(_, X):
+      X = Array(X); P = Array([ T.Predict(X) for T in _.Trees ])
+      return Array([ Counter(P[:, i]).most_common(1)[0][0] for i in range(len(X)) ])
+   __call__ = Predict = predict
+
+   def predict_proba(_, X):
+      X = Array(X); Probas = np.zeros((len(X), _.nC))
+      for Tree in _.Trees:
+         Tproba = T.P_proba(X)
+         if Tproba.shape[1]<_.nC:
+            padded = np.zeros(len(Tproba, _.nC))
+            padded[:, :Tproba.shape[1]] = Tproba
+            Tproba = padded
+         Probas += Tproba
+      return Probas/len(_.Trees)
+
+   Score = GetScore = lambda _,X,Y: Mean(_(X) == Array(Y).ravel())
+
+   def printTrees(_, maxTrees=5):
+      for i, T in enumerate(_.Trees[:maxTrees]): 
+         print(f"\n{'='*50}", f"Tree {i+1}:", f"{'='*50}"); _._print_tree(Tree.Root)
+    
+   def _print_tree(_, node, depth=0):
+      if node.V is not None: print(f"{'  '*depth}-> Class: {node.V}")
+      else:
+         print(f"{'  '*depth}? Feature {node.Opt} <= {node.T:.4f}")
+         print(f"{'  '*depth}  L:", end=""); _._print_tree(node.L, depth+1)
+         print(f"{'  '*depth}  R:", end=""); _._print_tree(node.R, depth+1)
+    
+
+
