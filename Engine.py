@@ -100,6 +100,23 @@ class ELayer(Layer):
 
 
 ######################################################################################################
+#* Optimizers
+
+class BaseOptimizer:
+   def __init__(_, meta, Lr=.01):
+      _.Type, _.meta, _.Lr, _.eps = _.__class__.__name__, [ Array(a) for a in meta ], Lr, 10e-8
+      __repr__ = lambda _: f"<Optimizer:{_.Type}>"
+      def Optimize(_, Grads): raise NotImplementedError
+      __call__ = Optimize
+
+
+class SGD(BaseOptimizer):
+   def Optimize(_, Grads):
+      if len(_.meta)!=len(Grads): raise IndexError(f" n(meta) != n(Grads) => {len(_.meta)} != {len(Grads)} ")
+      for p, g in zip(_.meta, Grads): p -= _.Lr*g
+   __call__ = Optimize
+
+######################################################################################################
 
 
 #? Neural Networks
