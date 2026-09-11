@@ -129,6 +129,15 @@ class SGDM(BaseOptimizer):
 SGDMomentum
 
 
+class Adagrad(BaseOptimizer):
+   def __init__(_, meta, Lr=.01):
+      super().__init__(meta, Lr); _.G = [ np.zeros_like(a) for a in _.meta ]
+   def Optimize(_, Grads):
+      for i, (p, g) in enumerate(zip(_.meta, Grads)):
+         _.G[i] += g*g; p -= _.Lr*g / (np.sqrt(_.G[i])+_.eps)
+   __call__ = Optimize
+
+
 ######################################################################################################
 
 
