@@ -138,6 +138,15 @@ class Adagrad(BaseOptimizer):
    __call__ = Optimize
 
 
+class RMSProp(BaseOptimizer):
+   def __init__(_, meta, Lr=.01, alpha=.99):
+      super().__init__(meta, Lr); _.a, _.v = alpha, [ np.zeros_like(a) for a in _.meta ]
+   def Optimize(_, Grads):
+      for i, (p, g) in enumerate(zip(_.meta, Grads)):
+         _.v[i] = _.a*_.v[i]+(1-_.a); p -= _.Lr*g / (np.sqrt(_.v[i])+_.eps)
+   __call__ = Optimize
+
+
 ######################################################################################################
 
 
