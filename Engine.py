@@ -147,6 +147,16 @@ class RMSProp(BaseOptimizer):
    __call__ = Optimize
 
 
+class Adadelta(BaseOptimizer):
+   def __init__(_, meta, Lr=.01, rho=.95):
+      super().__init__(meta, Lr); _.rho, _.Eg = rho, [ np.zeros_like(a) for a in _.meta ]; _.Ed = _.Eg.copy()
+   def Optimize(_, Grads):
+      for i, (p, g) in enumerate(zip(_.meta, Grads)):
+         _.Eg[i] = _.rho*_.Eg[i]+(1-_.rho)*g*g; d = np.sqrt( (_.Ed[i]+_.eps) / (_.Eg[i]+_.eps) )*g
+         _.Ed[i] = _.rho*_.Ed[i]+(1-_.rho)*d*d; p -= _.Lr*d
+   Optimize = __call__
+
+
 ######################################################################################################
 
 
