@@ -107,7 +107,7 @@ class BaseOptimizer:
    def __init__(_, meta, Lr=.01):
       _.Type, _.meta, _.Lr, _.eps = _.__class__.__name__, [ Array(a) for a in meta ], Lr, 10e-8
       __repr__ = lambda _: f"<Optimizer:{_.Type}>"
-      def Optimize(_, Grads): raise NotImplementedError
+   def Optimize(_, Grads): raise NotImplementedError
       __call__ = Optimize
 
 
