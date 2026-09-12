@@ -157,6 +157,19 @@ class Adadelta(BaseOptimizer):
    Optimize = __call__
 
 
+class Adam(BaseOptimizer):
+   def __init__(_, meta, Lr=.001, b1=.9, b2=.999):
+      super().__init__(meta, Lr); _.b1, _.b2, _.t = b1, b2, 0
+      _.m, _.v = [ np.zeros_like(a) for a in _.meta ], [ np.zeros_like(a) for a in _.meta ]
+   def Optimize(_, Grads):
+      _.t += 1
+      for i, (p, g) in enumerate(zip(_.meta, Grads)):
+         _.m[i] = _.b1*_.m[i]+(1-_.b1)*g; _.v[i] = _.b2*_.v[i]+(1-_.b2)*g*g
+         mh, vh = _.m[i] / (1-_.b1**_.t), _.v[i] / (1-_.b2**_.t)
+         p -= _.Lr*mh / (np.sqrt(vh)+_.eps)
+   Optimize = __call__
+
+
 ######################################################################################################
 
 
