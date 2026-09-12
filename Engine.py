@@ -102,6 +102,115 @@ class ELayer(Layer):
 
 
 ######################################################################################################
+#* Optimizers
+
+
+class BaseOptimizer:
+   def __init__(_, meta, Lr=.01):
+      _.Type, _.meta, _.Lr, _.eps = _.__class__.__name__, [ Array(a) for a in meta ], Lr, 10e-8
+      __repr__ = lambda _: f"<Optimizer:{_.Type}>"
+   def Optimize(_, Grads): raise NotImplementedError
+      __call__ = Optimize
+
+
+class SGD(BaseOptimizer):
+   def Optimize(_, Grads):
+      if len(_.meta)!=len(Grads): raise IndexError(f" n(meta) != n(Grads) => {len(_.meta)} != {len(Grads)} ")
+      for p, g in zip(_.meta, Grads): p -= _.Lr*g
+   __call__ = Optimize
+
+
+class SGDM(BaseOptimizer):
+   def __init__(_, meta, Lr=.01, m=.9, nesterov=False):
+      super().__init__(meta, Lr); _.m, _.nesterov, _.v = m, nesterov, [ np.zeros_like(a) for a in _.meta ]
+   def Optimize(_, Grads):
+      if len(_.meta)!=len(Grads): raise IndexError(f" n(meta) != n(Grads) => {len(_.meta)} != {len(Grads)} ")
+      for i, (p, g) in enumerate(zip(_.meta, Grads)):
+         _.v[i] = _.m*_.v[i]-_.Lr*g; p += _.m*_.v[i]-_.Lr*g if _.nesterov else _.v[i]
+   __call__ = Optimize
+SGDMomentum
+
+
+class Adagrad(BaseOptimizer):
+   def __init__(_, meta, Lr=.01):
+      super().__init__(meta, Lr); _.G = [ np.zeros_like(a) for a in _.meta ]
+   def Optimize(_, Grads):
+      for i, (p, g) in enumerate(zip(_.meta, Grads)):
+         _.G[i] += g*g; p -= _.Lr*g / (np.sqrt(_.G[i])+_.eps)
+   __call__ = Optimize
+
+
+class RMSProp(BaseOptimizer):
+   def __init__(_, meta, Lr=.01, alpha=.99):
+      super().__init__(meta, Lr); _.a, _.v = alpha, [ np.zeros_like(a) for a in _.meta ]
+   def Optimize(_, Grads):
+      for i, (p, g) in enumerate(zip(_.meta, Grads)):
+         _.v[i] = _.a*_.v[i]+(1-_.a); p -= _.Lr*g / (np.sqrt(_.v[i])+_.eps)
+   __call__ = Optimize
+
+
+class Adadelta(BaseOptimizer):
+   def __init__(_, meta, Lr=.01, rho=.95):
+      super().__init__(meta, Lr); _.rho, _.Eg = rho, [ np.zeros_like(a) for a in _.meta ]; _.Ed = _.Eg.copy()
+   def Optimize(_, Grads):
+      for i, (p, g) in enumerate(zip(_.meta, Grads)):
+         _.Eg[i] = _.rho*_.Eg[i]+(1-_.rho)*g*g; d = np.sqrt( (_.Ed[i]+_.eps) / (_.Eg[i]+_.eps) )*g
+         _.Ed[i] = _.rho*_.Ed[i]+(1-_.rho)*d*d; p -= _.Lr*d
+   Optimize = __call__
+
+
+class Adam(BaseOptimizer):
+   def __init__(_, meta, Lr=.001, b1=.9, b2=.999):
+      super().__init__(meta, Lr); _.b1, _.b2, _.t = b1, b2, 0
+      _.m, _.v = [ np.zeros_like(a) for a in _.meta ], [ np.zeros_like(a) for a in _.meta ]
+   def Optimize(_, Grads):
+      _.t += 1
+      for i, (p, g) in enumerate(zip(_.meta, Grads)):
+         _.m[i] = _.b1*_.m[i]+(1-_.b1)*g; _.v[i] = _.b2*_.v[i]+(1-_.b2)*g*g
+         mh, vh = _.m[i] / (1-_.b1**_.t), _.v[i] / (1-_.b2**_.t)
+         p -= _.Lr*mh / (np.sqrt(vh)+_.eps)
+   Optimize = __call__
+
+
+class NAdam(Adam):
+   def Optimize(_, Grads):
+      _.t += 1
+      for i, (p, g) in enumerate(zip(_.meta, Grads)):
+         _.m[i] = _.b1*_.m[i]+(1-_.b1)*g; _.v[i] = _.b2*_.v[i]+(1-_.b2)*g*g
+         mh, vh = _.m[i]/(1-_.b1**_.t), _.v[i]/(1-_.b2**_.t); mn = _.b1*mh+(1-_.b1)*g/(1-_.b1**_.t) 
+         p -= _.Lr*mn/(np.sqrt(vh)+_.eps)
+   __call__ = Optimize
+
+
+class AdamW(Adam):
+   def __init__(_, meta, Lr=.001, b1=.9, b2=.999, Wd=.01): super().__init__(meta, Lr, b1, b2); _.Wd = Wd
+   def Optimize(_, Grads):
+      _.t += 1
+      for i, (p, g) in enumerate(zip(_.meta, Grads)):
+         p -= _.Lr*_.Wd*p
+         _.m[i] = _.b1*_.m[i]+(1-_.b1)*g; _.v[i] = _.b2*_.v[i]+(1-_.b2)*g*g
+         mh, vh = _.m[i]/(1-_.b1**_.t), _.v[i]/(1-_.b2**_.t)
+         p -= -.Lr*mh/(np.sqrt(vh)+_.eps)
+
+
+class RAdam(Adam):
+   def __init__(_, meta, Lr=.001, b1=.9, b2=.999):
+      super().__init__(meta, Lr, b1, b2); _.rho_inf = 2/(1-_.b2)-1
+   def Optimize(_, Grads):
+      _.t += 1; Rt = _.rho_inf-2*_.t*(_.b2**_.t)/(1-_.b2**_.t)
+      for i, (p, g) in enumerate(zip(_.meta, Grads)):
+         _.m[i] = _.b1*_.m[i]+(1-_.b1)*g; _.v[i] = _.b2*_.v[i]+(1-_.b2)*g*g
+         mh = _.m[i]/(1-_.b1**_.t)
+         if Rt>4:
+            vh = _.v[i]/(1-_.b2**_.t)
+            rt = np.sqrt( ( (Rt-4)*(Rt-2)*_.rho_inf ) / ( (_.rho_inf-4)*(_.rho_inf-2)*Rt ) )
+            p -= _.Lr*rt*mh/(np.sqrt(vh)+_.eps)
+         else: p -= _.Lr*mh
+
+
+
+
+######################################################################################################
 
 
 #? Neural Networks
