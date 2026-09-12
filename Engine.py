@@ -180,6 +180,33 @@ class NAdam(Adam):
    __call__ = Optimize
 
 
+class AdamW(Adam):
+   def __init__(_, meta, Lr=.001, b1=.9, b2=.999, Wd=.01): super().__init__(meta, Lr, b1, b2); _.Wd = Wd
+   def Optimize(_, Grads):
+      _.t += 1
+      for i, (p, g) in enumerate(zip(_.meta, Grads)):
+         p -= _.Lr*_.Wd*p
+         _.m[i] = _.b1*_.m[i]+(1-_.b1)*g; _.v[i] = _.b2*_.v[i]+(1-_.b2)*g*g
+         mh, vh = _.m[i]/(1-_.b1**_.t), _.v[i]/(1-_.b2**_.t)
+         p -= -.Lr*mh/(np.sqrt(vh)+_.eps)
+
+
+class RAdam(Adam):
+   def __init__(_, meta, Lr=.001, b1=.9, b2=.999):
+      super().__init__(meta, Lr, b1, b2); _.rho_inf = 2/(1-_.b2)-1
+   def Optimize(_, Grads):
+      _.t += 1; Rt = _.rho_inf-2*_.t*(_.b2**_.t)/(1-_.b2**_.t)
+      for i, (p, g) in enumerate(zip(_.meta, Grads)):
+         _.m[i] = _.b1*_.m[i]+(1-_.b1)*g; _.v[i] = _.b2*_.v[i]+(1-_.b2)*g*g
+         mh = _.m[i]/(1-_.b1**_.t)
+         if Rt>4:
+            vh = _.v[i]/(1-_.b2**_.t)
+            rt = np.sqrt( ( (Rt-4)*(Rt-2)*_.rho_inf ) / ( (_.rho_inf-4)*(_.rho_inf-2)*Rt ) )
+            p -= _.Lr*rt*mh/(np.sqrt(vh)+_.eps)
+         else: p -= _.Lr*mh
+
+
+
 
 ######################################################################################################
 
