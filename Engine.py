@@ -170,6 +170,17 @@ class Adam(BaseOptimizer):
    Optimize = __call__
 
 
+class NAdam(Adam):
+   def Optimize(_, Grads):
+      _.t += 1
+      for i, (p, g) in enumerate(zip(_.meta, Grads)):
+         _.m[i] = _.b1*_.m[i]+(1-_.b1)*g; _.v[i] = _.b2*_.v[i]+(1-_.b2)*g*g
+         mh, vh = _.m[i]/(1-_.b1**_.t), _.v[i]/(1-_.b2**_.t); mn = _.b1*mh+(1-_.b1)*g/(1-_.b1**_.t) 
+         p -= _.Lr*mn/(np.sqrt(vh)+_.eps)
+   __call__ = Optimize
+
+
+
 ######################################################################################################
 
 
