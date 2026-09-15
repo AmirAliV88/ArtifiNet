@@ -41,13 +41,13 @@ class Layer:
       _.TrainModeOff()
 
    Neurons = lambda _: [ Neuron(w,b) for w,b in zip(_.W.T, _.Bias.T) ]
-   ReLU = Relu = lambda _,Z: np.maximum(0, Z)
-   Sigmoid = lambda _,Z: 1/(1+np.exp(-Z))
-   Linear = lambda _,Z: Z #: pass X
-   Tanh = lambda _,Z: np.tanh(Z)
-   def Softmax(_,Z): 
-      e = np.exp(Z-np.max(Z, axis=-1, keepdims=True))
-      return e / np.sum(e, axis=-1, keepdims=True)
+   ReLU = Relu = staticmethod( lambda Z: np.maximum(0, Z) )
+   Sigmoid = staticmethod( lambda Z: 1/(1+np.exp(-Z)) )
+   Linear = staticmethod( lambda Z: Z ) #: pass X
+   Tanh = staticmethod( lambda Z: np.tanh(Z) )
+   @staticmethod
+   def Softmax(Z): 
+      e = np.exp(Z-np.max(Z, axis=-1, keepdims=True)); return e/np.sum(e, axis=-1, keepdims=True)
 
    def _a(_):
       Z, A = _.LastCall[1], _.LastCall[2]
@@ -61,15 +61,16 @@ class Layer:
       raise ValueError(f'Activation {_.Act.lower()} not supported')
 
    def GET(_, X, Return_Thinks=False):
-      Z = Array(X) @_.W + _.Bias; A =_.Act(Z)
+      Z = Array(X) @_.W + _.Bias; A = _.Act(Z)
       Mask = A*npra.binomial(1, 1-_.Dropout, Z.shape)/(1-_.Dropout) if _.Train and _.Dropout else A
       _.LastCall = (X,Z,A,Mask); return _.LastCall if Return_Thinks else Mask
    __call__ = GET
 
-   def backward(_, dA, Lr):
-      W_, dZ, m = _.W.copy(), dA*_._a(), _.LastCall[0].shape[0]
-      _.W -= Lr* _.LastCall[0].T @ dZ /m; _.Bias -= Lr*np.sum(dZ, axis=0) /m #$ Bias -= Lr*dB
-      return dZ @ W_.T
+   def backward(_, dA, Optim=None, Lr=.01):
+      W_, dZ, X = _.W.copy(), dA*_._a(), _.LastCall[0]; dW, dB = (X.T@dZ)/len(X), np.sum(dZ, axis=1)/len(X)
+      if Optim: 
+         dB = np.sum(dZ, axis=0)/len(X); return ( (dZ, dW, dB), dZ @ W_.T )
+      _.W -= Lr*dW; _.Bias -= Lr*dB; return dZ @ W_.T
 
    def TrainModeOff(_): _.Train = False
    def TrainModeOn(_): _.Train = True
@@ -84,19 +85,32 @@ class ELayer(Layer):
    Neurons = lambda _: [ ENeuron(w,e,b) for w,e,b in zip(_.W.T, _.We.T, _.Bias.T) ]
 
    def GET(_, X, E, Return_Thinks=False):
-      Z = Array(X) @_.W + np.sum(E*_.We, axis=1) +_.Bias; A = _.Act(Z)
+      Z = Array(X) @_.W + E@_.We +_.Bias; A = _.Act(Z)
       Mask = A*npra.binomial(1, 1-_.Dropout, Z.shape)/(1-_.Dropout) if _.Train and _.Dropout else A
       _.LastCall = (E, X, Z, A, Mask); return _.LastCall if Return_Thinks else Mask
    __call__ = GET
 
-   def backward(_, dA, Lr):
-      W_, dZ, m = _.W.copy(), dA*_._a(), _.LastCall[1].shape[0]
-      _.W -= Lr* _.LastCall[1].T @ dZ /m; _.Bias -= Lr*np.sum(dZ, axis=0) /m #$ Bias -= Lr*dB
-      return dZ @ W_.T
+   def _a(_):
+      Z, A = _.LastCall[2], _.LastCall[3]
+      match _.__Act_str__:
+         case "Relu": return (Z>0).astype(float)
+         case "ReLU": return (A>0).astype(float)
+         case "Linear": return np.ones_like(A)
+         case "Softmax": return np.ones_like(A) #<< Softmax derivative is Jacobian, but we handle it separately 
+         case "Sigmoid": return A*(1-A)
+         case "Tanh": return 1-A**2
+      raise ValueError(f'Activation {_.Act.lower()} not supported')
 
-   def Ebackward(_, dA, Lr):
-      E = _.LastCall[0]; _.We -= Lr * E.T @ dA*_._a() / E.shape[0]  #$ dWe = E * dZ   |   We = Lr * sum(dWe) /m
-      return dZ @ _.W.T
+   def backward(_, dA, Optim=None, Lr=.01):
+      W_, dZ, X = _.W.copy(), dA*_._a(), _.LastCall[1]; dW, dB = (X.T@dZ)/len(X), np.sum(dZ, axis=0)/len(X)
+      if Optim: 
+         dB = np.sum(dZ, axis=0)/len(X); return ( (dZ, dW, dB), dZ @ W_.T )
+      _.W -= Lr*dW; _.Bias -= Lr*dB; return dZ @ W_.T
+
+   def Ebackward(_, dA, Optim=None, Lr=.01):
+      We_, dZ = _.W.copy(), dA*_._a(); dWe = np.outer(_.LastCall[0], np.sum(dZ, axis=0)) / len(dZ) 
+      if Optim: return ( (dZ, dWe), dZ@We_.T )
+      _.We -= Lr*dWe; return dZ@We_.T
 
 
 ######################################################################################################
@@ -139,7 +153,7 @@ class RMSProp(BaseOptimizer):
       super().__init__(meta, Lr); _.a, _.v = alpha, [ np.zeros_like(a) for a in _.meta ]
    def Optimize(_, Grads):
       for i, (p, g) in enumerate(zip(_.meta, Grads)):
-         _.v[i] = _.a*_.v[i]+(1-_.a); p -= _.Lr*g / (np.sqrt(_.v[i])+_.eps)
+         _.v[i] = _.a*_.v[i]+(1-_.a)*g*g; p -= _.Lr*g / (np.sqrt(_.v[i])+_.eps)
    __call__ = Optimize
 
 class Adadelta(BaseOptimizer):
@@ -180,7 +194,7 @@ class AdamW(Adam):
          p -= _.Lr*_.Wd*p
          _.m[i] = _.b1*_.m[i]+(1-_.b1)*g; _.v[i] = _.b2*_.v[i]+(1-_.b2)*g*g
          mh, vh = _.m[i]/(1-_.b1**_.t), _.v[i]/(1-_.b2**_.t)
-         p -= -.Lr*mh/(np.sqrt(vh)+_.eps)
+         p -= _.Lr*mh/(np.sqrt(vh)+_.eps)
    __call__ = Optimize
 
 class RAdam(Adam):
@@ -238,10 +252,12 @@ class ANN:
 
    def Accuracy(_, Yp, Y, Type="R2"):
       match Type:
-         case "R2": return 1-( np.sum((Y-Yp)**2) / (np.sum((Y-Mean(Y))**2)+1e-8) )
+         case "R2":
+            R2 = 1-( np.sum((Y-Yp)**2) / np.sum((Y-Mean(Y))**2)+1e-8 ); return max(0, R2)
          case "Binary":
             Yc = np.argmax(Y, axis=1) if len(Y.shape)>1 else Y.astype(int)
-            return Mean( (Yp>.5).astype(int).flatten() == Yc.flatten())
+            Ypc = np.argmax(Yp, axis=1) if len(Yp.shape)>1 else (Yp>0.5).astype(int)
+            return Mean(Ypc.flatten() == Yc.flatten())
          case "MultiClass": return Mean(np.argmax(Yp, axis=1) == np.argmax(Y, axis=1))
 
    def Activity(_, X): #<< Auto Return Thinks
@@ -251,8 +267,8 @@ class ANN:
       return S,A,Z
    Thinking = Activity
 
-   def Training(_, XT, YT):
-      #<< Training_Options:  Lrate*, Epochs*:int, BatchSize=1, LossMethod="MSE", AccuracyMethod="R2", AutoSave=True, EarlyStop=False, shuffle=False
+   def Training(_, XT, YT, OptimizerClass=None):
+      #<< Training_Options:  Lrate*, Epochs*:int, BatchSize=1, LossMethod="MSE", AccuracyMethod="R2", AutoSave=True, Silent=!None=True, EarlyStop=False, shuffle=False
       if not hasattr(_, "Training_Options"): raise AttributeError("Training allowed just with Net.Training_Options")
       
       O, XT, YT, Best = _.Training_Options, Array(XT), Array(YT), float('inf')
@@ -267,11 +283,18 @@ class ANN:
          for k in range(0, len(XT), Bs):
             X, Y = XT[k:k+Bs], YT[k:k+Bs]; A = _.Thinking(X)[1]
             Loss, dA = _.Loss(A[-1], Y, O.get("LossMethod", "MSE")); tLoss.append(Loss)
-            for L in reversed(_): dA = L.backward(dA, O["Lrate"])
-            tAcc.append(_.Accuracy(A, Y, O.get("AccuracyMethod"))) #<< Accuracy
+            if OptimizerClass is not None:
+               Grads = []
+               for L in reversed(_): 
+                  d, dA  = L.backward(dA, Optim=OptimizerClass); Grads.append(d[2]); Grads.append(d[1]) #<< Grads += dW , dB
+               OptimizerClass.Optimize(Grads[::-1])
+            else:
+               for L in reversed(_): dA = L.backward(dA, Lr=O["Lrate"])
+            tAcc.append(_.Accuracy(A[-1], Y, O.get("AccuracyMethod","R2"))) #<< Accuracy
 
-         os.system("cls" if os.name=="nt" else "clear")
-         print(f"Epoch: {e:4d} \t|\t Loss: {Mean(Array(tLoss)):.6f} \t|\t Accuracy: {Mean(Array(tAcc)):.2%} ")
+         if not O.get("Silent"):
+            os.system("cls" if os.name=="nt" else "clear")
+            print(f"Epoch: {e:4d} \t|\t Loss: {Mean(Array(tLoss)):.6f} \t|\t Accuracy: {Mean(Array(tAcc)):.2%} ")
 
          if O.get("EarlyStop"):
             if Loss<BestLoss: BestLoss = Loss
@@ -291,8 +314,9 @@ class ANN:
 #? Neural Network
 #@ ENN | AENN | Artificial emotional neural networks | شبکه های عصبی احساسی مصنوعی
 class ENN(ANN):
-
-   SterioEnv = lambda _: np.zeros(_[0].We.shape[1])
+   def __init__(_, NetName=None, Layers:list=[], ImportData=None): 
+      super().__init__(NetName=NetName, Layers=Layers, ImportData=ImportData)
+   SterioEnv = lambda _: np.zeros(_[0].We.shape[0])
 
    def SaveNetwork(_, AsFile=None): #$ --> File
       Domain = { 
@@ -313,8 +337,8 @@ class ENN(ANN):
       return S,A,Z
    Thinking = Activity
 
-   def ETraining(_, XT, YT, E):
-      #<< Training_Options:  Lrate*, Epochs*:int, BatchSize=1, LossMethod="MSE", AccuracyMethod="R2", AutoSave=True, EarlyStop=False
+   def ETraining(_, XT, YT, E, OptimizerClass=None):
+      #<< Training_Options:  Lrate*, Epochs*:int, BatchSize=1, LossMethod="MSE", AccuracyMethod="R2", AutoSave=True, Silent=!None=True, EarlyStop=False
       if not hasattr(_, "Training_Options"): raise AttributeError("Training allowed just with Net.Training_Options")
 
       O, XT, YT, Best, Bs = _.Training_Options, Array(XT), Array(YT), float('inf'), _.Training_Options.get("BatchSize", 1)
@@ -326,11 +350,18 @@ class ENN(ANN):
          for k in range(0, len(XT), Bs):
             X, Y = XT[k:k+Bs], YT[k:k+Bs]; A = _.Thinking(X, E)[1]
             Loss, dA = _.Loss(A[-1], Y, O.get("LossMethod", "MSE")); tLoss.append(Loss)
-            for L in reversed(_): dA = L.backward(dA, O["Lrate"])
-            tAcc.append(_.Accuracy(A, Y, O.get("AccuracyMethod"))) #<< Accuracy
+            if OptimizerClass is not None:
+               Grads = []
+               for L in reversed(_): 
+                  d, dA  = L.Ebackward(dA, Optim=OptimizerClass); Grads.append(d[1])
+               OptimizerClass.Optimize(Grads[::-1])
+            else:
+               for L in reversed(_): dA = L.Ebackward(dA, Lr=O["Lrate"])
+            tAcc.append(_.Accuracy(A[-1], Y, O.get("AccuracyMethod","R2"))) #<< Accuracy
 
-         os.system("cls" if os.name=="nt" else "clear")
-         print(f"Epoch: {epo:4d} \t|\t Loss: {Mean(Array(tLoss)):.6f} \t|\t Accuracy: {Mean(Array(tAcc)):.2%} ")
+         if not O.get("Silent"):
+            os.system("cls" if os.name=="nt" else "clear")
+            print(f"Epoch: {epo:4d} \t|\t Loss: {Mean(Array(tLoss)):.6f} \t|\t Accuracy: {Mean(Array(tAcc)):.2%} ")
 
          if O.get("EarlyStop"):
             if Loss<Best: Best = Loss
