@@ -1,4 +1,4 @@
-import os, re, safeserialize, numpy as np
+import os, time, re, safeserialize, numpy as np
 from collections import defaultdict, Counter
 from . import *
 
@@ -43,7 +43,7 @@ class Layer:
    Neurons = lambda _: [ Neuron(w,b) for w,b in zip(_.W.T, _.Bias.T) ]
    ReLU = Relu = staticmethod( lambda Z: np.maximum(0, Z) )
    Sigmoid = staticmethod( lambda Z: 1/(1+np.exp(-Z)) )
-   Linear = staticmethod( lambda Z: Z ) #: pass X
+   Linear = staticmethod( lambda Z: Z ) #: pass Z
    Tanh = staticmethod( lambda Z: np.tanh(Z) )
    @staticmethod
    def Softmax(Z): 
@@ -58,7 +58,7 @@ class Layer:
          case "Softmax": return np.ones_like(A) #<< Softmax derivative is Jacobian, but we handle it separately 
          case "Sigmoid": return A*(1-A)
          case "Tanh": return 1-A**2
-      raise ValueError(f'Activation {_.Act.lower()} not supported')
+      raise ValueError(f'Activation {_.Act} not supported')
 
    def GET(_, X, Return_Thinks=False):
       Z = Array(X) @_.W + _.Bias; A = _.Act(Z)
@@ -67,7 +67,7 @@ class Layer:
    __call__ = GET
 
    def backward(_, dA, Optim=None, Lr=.01):
-      W_, dZ, X = _.W.copy(), dA*_._a(), _.LastCall[0]; dW, dB = (X.T@dZ)/len(X), np.sum(dZ, axis=1)/len(X)
+      W_, dZ, X = _.W.copy(), dA*_._a(), _.LastCall[0]; dW, dB = (X.T@dZ)/len(X), np.sum(dZ, axis=0)/len(X)
       if Optim: 
          dB = np.sum(dZ, axis=0)/len(X); return ( (dZ, dW, dB), dZ @ W_.T )
       _.W -= Lr*dW; _.Bias -= Lr*dB; return dZ @ W_.T
@@ -78,39 +78,24 @@ class Layer:
 
 class ELayer(Layer):
    def __init__(_, Args:dict, Index=None, Act:str="Relu", Dropout=0):
-      _.W, _.We, _.Bias, _.LastCall = Array(Args["W"]), Array(Args["We"]), Array(Args["Bias"]), None
-      _.Index, _.Inputs, _.Dropout, _.__Act_str__, _.Act = Index, _.W.shape[1], Dropout, Act, eval(f"_.{Act}")
-      _.TrainModeOff()
+      super().__init__(Args=Args, Index=Index, Act=Act, Dropout=Dropout); _.We, _.LastE = Array(Args["We"]), None
 
    Neurons = lambda _: [ ENeuron(w,e,b) for w,e,b in zip(_.W.T, _.We.T, _.Bias.T) ]
 
+   @staticmethod
+   def _BatchE(E, n):
+      E = np.atleast_2d(Array(E, dtype=float)); return np.broadcast_to(E, (n, E.shape[-1]))
+
    def GET(_, X, E, Return_Thinks=False):
-      Z = Array(X) @_.W + E@_.We +_.Bias; A = _.Act(Z)
+      E = _._BatchE(E, len(X)); _.LastE = E; Z = Array(X)@_.W + E@_.We + _.Bias; A = _.Act(Z)
       Mask = A*npra.binomial(1, 1-_.Dropout, Z.shape)/(1-_.Dropout) if _.Train and _.Dropout else A
-      _.LastCall = (E, X, Z, A, Mask); return _.LastCall if Return_Thinks else Mask
+      _.LastCall = (X,Z,A,Mask); return _.LastCall if Return_Thinks else Mask
    __call__ = GET
 
-   def _a(_):
-      Z, A = _.LastCall[2], _.LastCall[3]
-      match _.__Act_str__:
-         case "Relu": return (Z>0).astype(float)
-         case "ReLU": return (A>0).astype(float)
-         case "Linear": return np.ones_like(A)
-         case "Softmax": return np.ones_like(A) #<< Softmax derivative is Jacobian, but we handle it separately 
-         case "Sigmoid": return A*(1-A)
-         case "Tanh": return 1-A**2
-      raise ValueError(f'Activation {_.Act.lower()} not supported')
-
-   def backward(_, dA, Optim=None, Lr=.01):
-      W_, dZ, X = _.W.copy(), dA*_._a(), _.LastCall[1]; dW, dB = (X.T@dZ)/len(X), np.sum(dZ, axis=0)/len(X)
-      if Optim: 
-         dB = np.sum(dZ, axis=0)/len(X); return ( (dZ, dW, dB), dZ @ W_.T )
-      _.W -= Lr*dW; _.Bias -= Lr*dB; return dZ @ W_.T
-
    def Ebackward(_, dA, Optim=None, Lr=.01):
-      We_, dZ = _.W.copy(), dA*_._a(); dWe = np.outer(_.LastCall[0], np.sum(dZ, axis=0)) / len(dZ) 
-      if Optim: return ( (dZ, dWe), dZ@We_.T )
-      _.We -= Lr*dWe; return dZ@We_.T
+      _W, dZ, E = _.W.copy(), dA*_._a(), _.LastE; dWe = (E.T@dZ)/len(E)
+      if Optim: return (dWe, dZ@_W.T)
+      _.We -= Lr*dWe; return dZ@_W.T
 
 
 ######################################################################################################
@@ -333,16 +318,17 @@ class ENN(ANN):
    def Activity(_, X, E=None): #<< Auto Return Thinks
       E = E if type(E)==np.ndarray else _.SterioEnv(); S, A, Z = [], [], [], #<< S: Inputs (Signals)
       for L in _: 
-         _, s, z, __, X = L(X, E, Return_Thinks=True); S.append(s); A.append(X); Z.append(z)
+         s, z, __, X = L(X, E, Return_Thinks=True); S.append(s); A.append(X); Z.append(z)
       return S,A,Z
    Thinking = Activity
 
    def ETraining(_, XT, YT, E, OptimizerClass=None):
-      #<< Training_Options:  Lrate*, Epochs*:int, BatchSize=1, LossMethod="MSE", AccuracyMethod="R2", AutoSave=True, Silent=!None=True, EarlyStop=False
+      #<< Training_Options:  Lrate*, Epochs*:int, BatchSize=1, LossMethod="MSE", AccuracyMethod="R2", AutoSave=True, Silent=None, EarlyStop=False
       if not hasattr(_, "Training_Options"): raise AttributeError("Training allowed just with Net.Training_Options")
-
       O, XT, YT, Best, Bs = _.Training_Options, Array(XT), Array(YT), float('inf'), _.Training_Options.get("BatchSize", 1)
       for L in _: L.TrainModeOn()
+      if not O.get("Silent"):
+         print(f"-> Env: {E}"); time.sleep(1)
 
       for epo in range(O["Epochs"]+1):
          tLoss, tAcc = [], []
@@ -353,7 +339,7 @@ class ENN(ANN):
             if OptimizerClass is not None:
                Grads = []
                for L in reversed(_): 
-                  d, dA  = L.Ebackward(dA, Optim=OptimizerClass); Grads.append(d[1])
+                  d, dA  = L.Ebackward(dA, Optim=OptimizerClass); Grads.append(d)
                OptimizerClass.Optimize(Grads[::-1])
             else:
                for L in reversed(_): dA = L.Ebackward(dA, Lr=O["Lrate"])
@@ -361,7 +347,7 @@ class ENN(ANN):
 
          if not O.get("Silent"):
             os.system("cls" if os.name=="nt" else "clear")
-            print(f"Epoch: {epo:4d} \t|\t Loss: {Mean(Array(tLoss)):.6f} \t|\t Accuracy: {Mean(Array(tAcc)):.2%} ")
+            print(f"> Env: {E} \nEpoch: {epo:4d} \t|\t Loss: {Mean(Array(tLoss)):.6f} \t|\t Accuracy: {Mean(Array(tAcc)):.2%} \t|\t Sterio? {(E==0).all()} ")
 
          if O.get("EarlyStop"):
             if Loss<Best: Best = Loss
@@ -540,8 +526,7 @@ class Embeddings:
     
    def _init_Weights(_): _.W_center, _.W_ct = npra.uniform(-0.5, 0.5, (_.V, _.dim)), npra.uniform(-0.5, 0.5, (_.V, _.dim))
     
-   @staticmethod
-   _Sigmoid = lambda x: 1/(1+np.exp(-np.clip(x, -50, 50)))
+   _Sigmoid = staticmethod( lambda x: 1/(1+np.exp( -np.clip(x, -50, 50) )) )
 
    def _negsUp(_, ci, cti): #! این متد خیلی مهم نی
       if not (0<=ci<_.V): raise IndexError("ci out of range")
