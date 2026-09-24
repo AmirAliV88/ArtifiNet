@@ -4,6 +4,115 @@ import numpy as np
 
 
 
+INSTALLED_OPTIMIZERS = [ BaseOptimizer, SGD, SGDM, SGDMomentum, Adagrad, RMSProp, Adadelta, Adam, NAdam, AdamW, RAdam ]
+
+INSTALLED_ORGANS = INSTALLED_NEURONS + + INSTALLED_OPTIMIZERS + [ 
+   Layer, ELayer, ANN, ENN, KNN, KMeans, SVM, KNN, Tokenizer, Embeddings, LeafNode, DecisionTree, RandomForest 
+]
+
+ORGANS_GEN_INDEXS = {
+   "Neuron":(0, 1)
+   "ENeuron":(2, 4)
+   "RNeuron":(5, 7)
+   "Layer":(8, 11)
+   "ELayer":(12, 15)
+   "SGD":(16, 17)
+   "SGDM":(18, 21)
+   "Adagrad":(22, 23)
+   "RMSProp":(24, 26)
+   "Adadelta":(27, 29)
+   "Adam":(30, 33)
+   "NAdam":(34, 35)
+   "AdamW":(36, 40)
+   "RAdam":(41, 44)
+   "ANN":(45, 48)
+   "ENN":(49, 52)
+   "K-Menas":(53, 56)
+}
+
+ORGANS_REQUIREMENTS = {
+
+   #$* Neuron
+   0:lambda x:nprArr(x),
+   1:lambda x:nprArr(x),
+
+   #$* ENeuron
+   2:lambda x:nprArr(x),
+   3:lambda x:nprArr(x),
+   4:lambda x:nprArr(x),
+
+   #$* RNeuron
+   5:lambda x:nprArr(x),
+   6:lambda x:nprArr(x),
+   7:lambda x:nprArr(x),
+
+   #$* Layer
+   8: lambda w,n,b: {"W":nprArr((w,n))/20, "Bias":nprArr((1,b))/50},
+   #<< + 9 10 11
+
+   #$* ELayer
+   12: lambda w,n,e,b: {"W":nprArr((w,n))/20, "We":nprArr((e,w))/40, "Bias":nprArr((1,b))/50},
+   #<< + 13 14 15
+
+   #$* SGD
+   16:lambda w,n:nprArr((w,n)),
+   #<< + 17
+
+   #$* SGDM
+   18:lambda w,n:nprArr((w,n)),
+   #<< + 19 20 21
+
+   #$* AdaGrad
+   22:lambda w,n:nprArr((w,n)),
+   #<< + 23
+
+   #$* RMSProp
+   24:lambda w,n:nprArr((w,n)),
+   #<< + 25 26
+
+   #$* Adadelta
+   27:lambda w,n:nprArr((w,n)),
+   #<< + 28 29
+
+   #$* Adam
+   30:lambda w,n:nprArr((w,n)),
+   #<< + 31 32 33
+
+   #$* NAdam
+   34:lambda w,n:nprArr((w,n)),
+   #<< + 35
+
+   #$* AdamW
+   36:lambda w,n:nprArr((w,n)),
+   #<< + 37 38 39 40
+
+   #$* RAdam
+   41:lambda w,n:nprArr((w,n)),
+   #<< + 42 43 44
+
+   #$* ANN
+   45:lambda n:str(n),
+   46:lambda Net,Act,out:[ 
+      Layer(Args={"W":nprArr((Net[i-1], n))/20, "Bias":nprArr((1,n))/50} Act=Act, Dropout=out) for i,n in enumerate(Net[1:]) 
+   ]
+   #<< + 47 48
+
+   #$* ENN
+   49:lambda n:str(n),
+   50:lambda Net,e,Act,out:[ 
+      Layer(Args={"W":nprArr((Net[i-1], n))/20, "We":nprArr((e,n))/40, "Bias":nprArr((1,n))/50} Act=Act, Dropout=out) 
+      for i,n in enumerate(Net[1:]) 
+   ]
+   #<< + 51 52
+
+   #$* K-Menas
+   #<< + 53 54 55
+   56:lambda x:str(x)
+
+}
+
+
+
 class WeightInitializer:
    XAVIER_ACTIVATIONS, HE_ACTIVATIONS = [ "Sigmoid", "Tanh", "Softmax", "Linear", "None" ], [ "Relu" ]
    VALID_METHODS, VALID_DISTRIBUTIONS = [ "Auto", "Xavier", "Glorot", "He", "Kaiming" ], [ "Normal", "Uniform" ]
@@ -75,3 +184,6 @@ class WeightInitializer:
 
    __repr__ = lambda _: f"<WeightInitializer:[ Act={_.Act}  Method={_.Method} ]>"
 
+
+#* Cell Core | Genome | Generator
+class Core:
