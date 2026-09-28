@@ -1,32 +1,33 @@
 from . import *
 from .Engine import *
-import numpy as np
+import pickle, numpy as np
+from collections import defaultdict
 
 
 
 INSTALLED_OPTIMIZERS = [ BaseOptimizer, SGD, SGDM, SGDMomentum, Adagrad, RMSProp, Adadelta, Adam, NAdam, AdamW, RAdam ]
 
-INSTALLED_ORGANS = INSTALLED_NEURONS + + INSTALLED_OPTIMIZERS + [ 
+INSTALLED_ORGANS = INSTALLED_NEURONS + INSTALLED_OPTIMIZERS + [ 
    Layer, ELayer, ANN, ENN, KNN, KMeans, SVM, KNN, Tokenizer, Embeddings, LeafNode, DecisionTree, RandomForest 
 ]
 
 ORGANS_GEN_INDEXS = {
-   "Neuron":(0, 1)
-   "ENeuron":(2, 4)
-   "RNeuron":(5, 7)
-   "Layer":(8, 11)
-   "ELayer":(12, 15)
-   "SGD":(16, 17)
-   "SGDM":(18, 21)
-   "Adagrad":(22, 23)
-   "RMSProp":(24, 26)
-   "Adadelta":(27, 29)
-   "Adam":(30, 33)
-   "NAdam":(34, 35)
-   "AdamW":(36, 40)
-   "RAdam":(41, 44)
-   "ANN":(45, 48)
-   "ENN":(49, 52)
+   "Neuron":(0, 1),
+   "ENeuron":(2, 4),
+   "RNeuron":(5, 7),
+   "Layer":(8, 11),
+   "ELayer":(12, 15),
+   "SGD":(16, 17),
+   "SGDM":(18, 21),
+   "Adagrad":(22, 23),
+   "RMSProp":(24, 26),
+   "Adadelta":(27, 29),
+   "Adam":(30, 33),
+   "NAdam":(34, 35),
+   "AdamW":(36, 40),
+   "RAdam":(41, 44),
+   "ANN":(45, 48),
+   "ENN":(49, 52),
    "K-Menas":(53, 56)
 }
 
@@ -93,16 +94,16 @@ ORGANS_REQUIREMENTS = {
    #$* ANN
    45:lambda n:str(n),
    46:lambda Net,Act,out:[ 
-      Layer(Args={"W":nprArr((Net[i-1], n))/20, "Bias":nprArr((1,n))/50} Act=Act, Dropout=out) for i,n in enumerate(Net[1:]) 
-   ]
+      Layer(Args={"W":nprArr((Net[i-1],n))/20, "Bias":nprArr((1,n))/50}, Act=Act, Dropout=out) for i,n in enumerate(Net[1:]) 
+   ],
    #<< + 47 48
 
    #$* ENN
    49:lambda n:str(n),
    50:lambda Net,e,Act,out:[ 
-      Layer(Args={"W":nprArr((Net[i-1], n))/20, "We":nprArr((e,n))/40, "Bias":nprArr((1,n))/50} Act=Act, Dropout=out) 
+      Layer(Args={"W":nprArr((Net[i-1],n))/20, "We":nprArr((e,n))/40, "Bias":nprArr((1,n))/50}, Act=Act, Dropout=out) 
       for i,n in enumerate(Net[1:]) 
-   ]
+   ],
    #<< + 51 52
 
    #$* K-Menas
@@ -187,3 +188,62 @@ class WeightInitializer:
 
 #* Cell Core | Genome | Generator
 class Core:
+   def __init__(_, ImportFromFile=None, ImportGenString=None):
+      if (ImportFromFile and ImportGenString) or (ImportFromFile==ImportGenString==None): 
+         raise ValueError("Wich I load from? ImportFromFile or ImportGenString ?")
+      if ImportFromFile: _.__Load__(ImportFromFile)
+      elif ImportGenString: _.DNA, _.Gen = ImportGenString, _.ReadGen(ImportGenString)
+      _.Organs = [ Core ]
+   Connect = lambda _,Org: ( _.Organs, _.Organs.append(Org) ) [0]
+
+   __delitem__ = lambda _,I: ( _, _.Organs.pop(I) ) [0]
+   __iadd__ = lambda _,O: ( _, _.Connect(O) ) [0]
+
+   def __Load__(ImportFromFile):
+      with open(ImportFromFile, "r") as File: _.DNA, _.Gen = File.read(), _.ReadGen(File.read())
+
+   def ReadGen(_, GenString):
+      _.K_Type = "UnSupervised" if GenString.startswith('<$:') and '$' in GenString else "Supervised"
+
+      if _.K_Type=="UnSupervised": #$ UnSupervised
+         if (m:=re.fullmatch(r'^<\$:\[\s*((?:\d+:\S+\s*)+)\]>$', GenString)): 
+            return { int(A):eval(v) for A,v in re.findall(r'(\d+):(\S+)', m.group(1)) } 
+         raise SyntaxError(" !: <$:[ ... ]>")
+
+      elif _.K_Type=="Supervised": #$ Supervised
+         Gens = []
+         for Genome in GenString.split("\n"):
+            if (m:=re.match(r'<(\w+):\[\s*(.*?)\s*\]>', GenString)):
+               Gens.append({ "Org":m.group(1), "Args":{ A:eval(v) for A,v in re.findall(r'(\w+):(\S+)', m.group(2)) } })
+         return Gens
+
+   def OrderGenByOrg(_):
+      Groups = defaultdict(list)
+      for I,v in _.Gen.items():
+         if any( Q:=O for O,(I0,I1) in ORGANS_GEN_INDEXS.items() if I1>=I>=I0 ): Groups[Q].append((I,v))
+      for O,G in Groups.items():
+         OGI = ORGANS_GEN_INDEXS
+         if Mean([ I for I,v in G ]) != Mean([ np.arange(OGI[O][1]-OGI[O][0]+1) ]): 
+            raise SyntaxError(" !: DNA/RNA .Gen is not Ordered ")
+      return Groups
+   GroupingGen = OrderGenByOrg
+
+   def Generator(_):
+      if _.K_Type=="UnSupervised":
+         for Org,Arg in _.GroupingGen().items(): 
+            Arg = ', '.join([ 
+               repr(ORGANS_REQUIREMENTS[A](v)).replace('array', 'Array', 1) if ORGANS_REQUIREMENTS.get(A) else v for A,v in Arg 
+            ])
+            _.Connect(eval(f"{Org}({Arg})"))
+
+      elif _.K_Type=="Supervised":
+         for O in _.Gen:
+            Args = ', '.join([ f"{A}={ORGANS_REQUIREMENTS[A](v)}" if ORGANS_REQUIREMENTS.get(A) else f"{A}={v}" for A,v in O["Args"].items() ])
+            _.Connect(eval(f"{O["Org"]}({Args})"))
+      
+      return _.Organs
+
+   def Save(_, AsFile):
+      with open(AsFile, "wb") as File: pickle.dump(_, File)
+
+
