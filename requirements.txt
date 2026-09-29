@@ -3,3 +3,4 @@ re
 collections
 safeserialize
 joblib
+pickle
