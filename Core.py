@@ -28,7 +28,7 @@ ORGANS_GEN_INDEXS = {
    "RAdam":(41, 44),
    "ANN":(45, 48),
    "ENN":(49, 52),
-   "K-Menas":(53, 56)
+   "KMeans":(53, 56)
 }
 
 ORGANS_REQUIREMENTS = {
@@ -223,7 +223,7 @@ class Core:
          if any( Q:=O for O,(I0,I1) in ORGANS_GEN_INDEXS.items() if I1>=I>=I0 ): Groups[Q].append((I,v))
       for O,G in Groups.items():
          OGI = ORGANS_GEN_INDEXS
-         if Mean([ I for I,v in G ]) != Mean([ np.arange(OGI[O][1]-OGI[O][0]+1) ]): 
+         if Mean([ np.arange(OGI[O][0], OGI[O][1]+1) ]) != Mean([ I for I,v in G ]): 
             raise SyntaxError(" !: DNA/RNA .Gen is not Ordered ")
       return Groups
    GroupingGen = OrderGenByOrg
@@ -232,7 +232,7 @@ class Core:
       if _.K_Type=="UnSupervised":
          for Org,Arg in _.GroupingGen().items(): 
             Arg = ', '.join([ 
-               repr(ORGANS_REQUIREMENTS[A](v)).replace('array', 'Array', 1) if ORGANS_REQUIREMENTS.get(A) else v for A,v in Arg 
+               repr(ORGANS_REQUIREMENTS[A](v)).replace('array', 'Array', 1) if ORGANS_REQUIREMENTS.get(A) else str(v) for A,v in Arg 
             ])
             _.Connect(eval(f"{Org}({Arg})"))
 
