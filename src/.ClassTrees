@@ -1,0 +1,30 @@
+Main -> Engine.py:
+   > INSTALLED_NEURONS = [ Neuron, ENeuron, RNeuron ]
+   > Layer
+   > ELayer
+   > OPTIMIZERS = [ BaseOptimizer, SGD, SGDM, SGDMomentum, Adagrad, RMSProp, Adadelta, Adam, NAdam, AdamW, RAdam ]
+   > ANN
+   > ENN
+   > KNN
+   > KMeans
+   > SVM
+   > Tokenizer
+   > Embeddings
+   > LeafNode
+   > DecisionTree
+   > RandomForest
+
+
+Core -> Core.py:
+   > WeightInitializer
+   > Core
+
+
+Emotion -> Engine.py:
+   > ENeuron
+   > ELayer
+   > ENN
+
+
+Optimizers -> Engine.py:
+   > OPTIMIZERS = [ BaseOptimizer, SGD, SGDM, SGDMomentum, Adagrad, RMSProp, Adadelta, Adam, NAdam, AdamW, RAdam ]

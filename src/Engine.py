@@ -433,15 +433,13 @@ class KMeans:
       _.I = np.sum((X-_.C[_.L])**2)
       return _
     
-      predict = __call__ = lambda _,X: np.argmin(np.sqrt(((X-_.C[:, np.newaxis])**2).sum(axis=2)), axis=0)
+   predict = __call__ = lambda _,X: np.argmin(np.sqrt(((X-_.C[:, np.newaxis])**2).sum(axis=2)), axis=0)
     
-   fit_predict = lambda _,X: _.fit(X).L
-
 
 #? Algoritm
 #@ SVM | بردار ماشین پشتیبان
 class SVM:
-   def __init__(_, Kernel='Linear', C=1.0, tol=1e-3, maxi=100, degree=3, Gamma=None, coef0=0.0):
+   def __init__(_, Kernel='Linear', C=1, tol=1e-3, maxi=100, degree=3, Gamma=None, coef0=0.0):
       _.Kernel, _.C, _.tol, _.maxi, _.degree, _.Gamma, _.coef0, _.alpha = Kernel, C, tol, maxi, degree, Gamma, coef0, None
       _.B, _.X, _.Y, _.K = 0, None, None, None
 
@@ -607,10 +605,10 @@ class Embeddings:
             for j in cti: _.Pairs.append((_.W2I[c], _.W2I[s[j]]))
       _.Pairs = Array(_.Pairs, dtype=np.intp)
     
-   def fit(_, Domain):
+   def fit(_, Domain, EchoEpo=True):
       _.Tokenizer.fit(Domain)
       _.Domain, _.S = Domain, [ _.Tokenize(S) for S in Domain ]
-      _._BuildVocab(); _._BuildTrainingPairs(); _._init_Weights(); _.Train(); _.BuildEmbedds(); _.Tokenizer.fit(Domain)
+      _._BuildVocab(); _._BuildTrainingPairs(); _._init_Weights(); _.Train(EchoEpo=EchoEpo); _.BuildEmbedds(); _.Tokenizer.fit(Domain)
       return _
     
    def _init_Weights(_): _.W_center, _.W_ct = npra.uniform(-0.5, 0.5, (_.V, _.dim)), npra.uniform(-0.5, 0.5, (_.V, _.dim))
