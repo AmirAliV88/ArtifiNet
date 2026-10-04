@@ -587,6 +587,20 @@ methods:
 
 [!WARNING] The Core object can do dangerous things, so be fully alert after creating the object (even though full power is not written in this code).
 
+---
+
+## Install the Library:
+
+```bash
+pip install git+https://github.com/AmirAliv88/ArtifiNet.git
+```
+
+and Import it in your code
+
+```python
+import ArtifiNet
+```
+
 <br><br><br><br><br>
 
 <center> <small style="color: #5ac;"> Powered By A∞ </small> </center>
