@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ArtifiNet"
-version = "0.1.0"
+version = "0.49.0" # n( commits ) = 49
 description = "A magic AI builder library"
 requires-python = ">=3.9"
 readme = "README.md"
@@ -17,10 +17,10 @@ dependencies = [  "numpy",  "re",  "collections",  "safeserialize",  "joblib",  
 
 #!!!
 [project.urls]
-Homepage      = "https://github.com/USERNAME/My-Repo-lib"
-Repository    = "https://github.com/USERNAME/My-Repo-lib"
-Issues        = "https://github.com/USERNAME/My-Repo-lib/issues"
-Changelog     = "https://github.com/USERNAME/My-Repo-lib/releases"
+Homepage      = "https://github.com/AmirAliV88/ArtifiNet"
+Repository    = "https://github.com/AmirAliV88/ArtifiNet"
+Issues        = "https://github.com/AmirAliV88/ArtifiNet/issues"
+Changelog     = "https://github.com/AmirAliV88/ArtifiNet/releases"
 
 [tool.setuptools]
 package-dir = { ""="src" }
@@ -28,3 +28,7 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["ArtifiNet*"]
+
+
+
+#$? Powered By A∞
