@@ -257,7 +257,8 @@ methods:
    __Load__(FilePath)                                                              > Giving path address of a file to load it as a Embedding object.
    _FPT_ = _FitWithPreTrained_ = (Dom, PreTrainedPath=None, SavePath=None)=>...    > PreTrainedPath is FilePath in __Load__; Dom is new Domain data for add o model; SavePath is for saving the new model (you can don't).
 ```
-> [!TIP] in solve method eq string as example is ' sky - sun + moon = night ' or ' king - man + woman = queen '.
+> [!TIP] 
+> in solve method eq string as example is ' sky - sun + moon = night ' or ' king - man + woman = queen '.
 
 <br><br><br><br><br>
 
@@ -298,7 +299,8 @@ But now AIs have it too, and there's even a possibility that one day they might 
 
 و هر لایه نیازمند پارامتر جدیدی به نام We ست و Backward جدید که فقط We رو اپدیت کنه
 
-[!NOTE] این مدل ها به طور اختصاصی برای محیط های غیر استریو طراحی شدن یعنی محیط زندگی و شهر
+> [!NOTE] 
+> این مدل ها به طور اختصاصی برای محیط های غیر استریو طراحی شدن یعنی محیط زندگی و شهر
 
 ---
 
@@ -309,7 +311,8 @@ For this parameter to affect the network, we need a weight `We` that exactly rep
 
 And each layer needs a new parameter called We and a new backward that only updates We.
 
-[!NOTE] These models were specifically designed for non-stereo environments, meaning living spaces and cities.
+> [!NOTE] 
+> These models were specifically designed for non-stereo environments, meaning living spaces and cities.
 
 تفاوت این معماری با معماری ANN های ساده اینجاست که میتونه سیگنال خورجی خودشو در برابر یک سیگنال انحراف بده
 
@@ -371,7 +374,8 @@ methods:
 
 ### نسل جدید شبکه های عصبی با نام ENN
 
-[!NOTE] تمام ویژگی های ANN اینجا هم وجود دارن | All of ANN properties is there are
+> [!NOTE] 
+> تمام ویژگی های ANN اینجا هم وجود دارن | All of ANN properties is there are
 
 ```ts
 mathods:
@@ -396,12 +400,14 @@ methods:
 
 <br><br><br>
 
-[!WARNING] برای اموزش این مدل ها اول باید در محیط استریو وزن اصلی `Wx` و `Bias` رو دقیق یادبگیرن و بعدش باید از هر لایه محیط استریو رو پاک کنی (`Layer.LastE = None`) تا محیط استریو یادش نیاد و حالا میتونی در محیط با بردادر محیطی همون جا اموزشش بدی.
+> [!WARNING] 
+> برای اموزش این مدل ها اول باید در محیط استریو وزن اصلی `Wx` و `Bias` رو دقیق یادبگیرن و بعدش باید از هر لایه محیط استریو رو پاک کنی (`Layer.LastE = None`) تا محیط استریو یادش نیاد و حالا میتونی در محیط با بردادر محیطی همون جا اموزشش بدی.
 
 
 ---
 
-[!WARNING] To train these models, first you need to accurately learn the main weights `Wx` and `Bias` in the stereo environment, and then you have to clear the stereo environment from each layer (`Layer.LastE = None`) so it doesn't remember it, and now you can train it right there in the environment with the context vector.
+> [!WARNING] 
+> To train these models, first you need to accurately learn the main weights `Wx` and `Bias` in the stereo environment, and then you have to clear the stereo environment from each layer (`Layer.LastE = None`) so it doesn't remember it, and now you can train it right there in the environment with the context vector.
 
 <br><br><br><br><br>
 
@@ -573,19 +579,23 @@ methods:
 
 <br><br><br>
 
-[!NOTE] نکته ی مهمی که توی هایپر پارامتر های ORGANS_REQUIREMENTS هم مشخصه بعضی از ایندکش ها مستقیم وارد نمیشن که هدف سادگی و دیتا محور بودن ژنتیک هستن تا ژنتیک دقیقا مشابه کد و سینتک کد نویسی نباشه.
+> [!NOTE]
+> نکته ی مهمی که توی هایپر پارامتر های ORGANS_REQUIREMENTS هم مشخصه بعضی از ایندکش ها مستقیم وارد نمیشن که هدف سادگی و دیتا محور بودن ژنتیک هستن تا ژنتیک دقیقا مشابه کد و سینتک کد نویسی نباشه.
 
 ---
 
-[!NOTE] An important point that's also specified in the ORGANS_REQUIREMENTS hyperparameters is that some indices aren't entered directly; the goal is simplicity and being data-driven in genetics so that genetics isn't exactly like coding and programming syntax.
+> [!NOTE] 
+> An important point that's also specified in the ORGANS_REQUIREMENTS hyperparameters is that some indices aren't entered directly; the goal is simplicity and being data-driven in genetics so that genetics isn't exactly like coding and programming syntax.
 
 <br><br>
 
-[!WARNING] شی Core مکنه کار های خطرناکی کنه پس از تولید شی کاملا هوشیار باشید (هر چند که قدرت کامل در این کد نوشته نشده).
+> [!WARNING] 
+> شی Core مکنه کار های خطرناکی کنه پس از تولید شی کاملا هوشیار باشید (هر چند که قدرت کامل در این کد نوشته نشده).
 
 ---
 
-[!WARNING] The Core object can do dangerous things, so be fully alert after creating the object (even though full power is not written in this code).
+> [!WARNING] 
+> The Core object can do dangerous things, so be fully alert after creating the object (even though full power is not written in this code).
 
 ---
 
